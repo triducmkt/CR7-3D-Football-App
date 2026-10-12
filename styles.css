@@ -1,5 +1,5 @@
 /* ==========================================================================
-   TDCM ARENA 3D - CR7 EDITION
+   TDCM ARENA 3D - CR7 EDITION (5X HIGH-POLY & SWEET-SPOT POWER METER)
    Inherits TDCM Team App Style Guide:
    - Fonts: 'Montserrat' (Headings 800-900), 'Inter' (Body/HUD)
    - Brand Colors: Google Blue (#4285F4, #1A4B9F, #2A64D2)
@@ -66,8 +66,8 @@ html, body {
   pointer-events: none;
   z-index: 2;
   background:
-    radial-gradient(circle at 50% 42%, transparent 48%, rgba(4, 10, 24, 0.62) 100%),
-    linear-gradient(180deg, rgba(8, 18, 40, 0.45) 0%, transparent 22%, transparent 78%, rgba(6, 12, 28, 0.72) 100%);
+    radial-gradient(circle at 50% 42%, transparent 52%, rgba(4, 10, 24, 0.58) 100%),
+    linear-gradient(180deg, rgba(8, 18, 40, 0.38) 0%, transparent 18%, transparent 82%, rgba(6, 12, 28, 0.68) 100%);
 }
 
 /* ==========================================================================
@@ -75,9 +75,9 @@ html, body {
    ========================================================================== */
 .top-nav-bar {
   position: fixed;
-  top: 16px;
-  left: 20px;
-  right: 20px;
+  top: 12px;
+  left: 18px;
+  right: 18px;
   z-index: 20;
   display: flex;
   align-items: center;
@@ -90,7 +90,7 @@ html, body {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 16px;
+  padding: 7px 15px;
   border-radius: 999px;
   background: rgba(13, 25, 48, 0.84);
   border: 1px solid var(--tdcm-border);
@@ -136,7 +136,7 @@ html, body {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 9px 16px;
+  padding: 8px 15px;
   border-radius: 12px;
   font-family: var(--font-heading);
   font-weight: 700;
@@ -166,14 +166,14 @@ html, body {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  padding: 14px 24px;
+  padding: 13px 22px;
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.22);
   background: var(--tdcm-gradient-btn);
   color: #FFFFFF;
   font-family: var(--font-heading);
   font-weight: 800;
-  font-size: 14px;
+  font-size: 13px;
   letter-spacing: 0.5px;
   text-transform: uppercase;
   cursor: pointer;
@@ -187,12 +187,15 @@ html, body {
   transform: translateY(-2px);
 }
 
-.btn-submit-modal:active {
-  transform: translateY(0);
+.btn-submit-modal:active,
+.btn-submit-modal.charging {
+  transform: scale(0.97);
+  background: linear-gradient(135deg, #DC2626 0%, #F59E0B 100%);
+  box-shadow: 0 0 28px rgba(239, 68, 68, 0.75);
 }
 
 /* ==========================================================================
-   HOME SCREEN OVERLAY (Màn hình Home)
+   HOME SCREEN OVERLAY (Compact Bottom Card so Full-Body CR7 is Visible)
    ========================================================================== */
 #home-screen {
   position: fixed;
@@ -202,7 +205,7 @@ html, body {
   flex-direction: column;
   justify-content: flex-end;
   align-items: center;
-  padding: 24px 20px 34px;
+  padding: 14px 16px 16px;
   pointer-events: none;
   transition: opacity 0.45s ease, transform 0.45s ease;
 }
@@ -215,21 +218,21 @@ html, body {
 
 .home-cinematic-badge {
   position: fixed;
-  top: 72px;
+  top: 56px;
   left: 50%;
   transform: translateX(-50%);
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 16px;
+  padding: 5px 14px;
   border-radius: 999px;
   background: rgba(15, 28, 55, 0.72);
   border: 1px solid rgba(245, 197, 66, 0.45);
   color: var(--cr7-gold);
   font-family: var(--font-heading);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
-  letter-spacing: 1px;
+  letter-spacing: 0.9px;
   text-transform: uppercase;
   backdrop-filter: blur(8px);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
@@ -253,13 +256,13 @@ html, body {
   pointer-events: auto;
   width: 100%;
   max-width: 760px;
-  background: linear-gradient(180deg, rgba(13, 25, 52, 0.84) 0%, rgba(8, 16, 36, 0.92) 100%);
+  background: linear-gradient(180deg, rgba(13, 25, 52, 0.78) 0%, rgba(8, 16, 36, 0.88) 100%);
   border: 1px solid rgba(66, 133, 244, 0.45);
-  border-radius: 24px;
-  padding: 24px 28px;
-  backdrop-filter: blur(16px);
+  border-radius: 20px;
+  padding: 16px 22px;
+  backdrop-filter: blur(14px);
   box-shadow:
-    0 24px 60px rgba(0, 0, 0, 0.65),
+    0 20px 50px rgba(0, 0, 0, 0.6),
     inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
@@ -267,15 +270,15 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 18px;
+  gap: 12px;
+  margin-bottom: 12px;
   flex-wrap: wrap;
 }
 
 .home-title-block h1 {
   font-family: var(--font-heading);
   font-weight: 900;
-  font-size: 26px;
+  font-size: 21px;
   line-height: 1.15;
   letter-spacing: 0.4px;
   text-transform: uppercase;
@@ -285,56 +288,56 @@ html, body {
 }
 
 .home-title-block p {
-  font-size: 13px;
+  font-size: 12px;
   color: #CBD5E1;
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 .cr7-stat-badge {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   background: rgba(26, 75, 159, 0.35);
   border: 1px solid rgba(66, 133, 244, 0.45);
-  padding: 8px 14px;
-  border-radius: 14px;
+  padding: 6px 12px;
+  border-radius: 12px;
 }
 
 .cr7-number {
   font-family: var(--font-heading);
   font-weight: 900;
-  font-size: 24px;
+  font-size: 21px;
   color: var(--cr7-gold);
   text-shadow: 0 2px 10px rgba(245, 197, 66, 0.45);
 }
 
 .cr7-meta {
   font-size: 11px;
-  line-height: 1.35;
+  line-height: 1.3;
   color: #E2E8F0;
 }
 
 .cr7-meta strong {
   display: block;
   font-family: var(--font-heading);
-  font-size: 12px;
+  font-size: 11px;
   color: #FFFFFF;
 }
 
 /* Player Name Input */
 .player-input-group {
-  margin-bottom: 18px;
+  margin-bottom: 12px;
 }
 
 .player-input-label {
   display: block;
   font-family: var(--font-heading);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.8px;
   color: #93C5FD;
-  margin-bottom: 8px;
+  margin-bottom: 5px;
 }
 
 .player-input-wrap {
@@ -345,21 +348,21 @@ html, body {
 
 .player-input-icon {
   position: absolute;
-  left: 16px;
-  font-size: 16px;
+  left: 14px;
+  font-size: 15px;
   pointer-events: none;
 }
 
 .player-name-input {
   width: 100%;
-  padding: 13px 16px 13px 44px;
-  border-radius: 14px;
+  padding: 10px 14px 10px 40px;
+  border-radius: 12px;
   border: 1.5px solid rgba(66, 133, 244, 0.5);
   background: rgba(6, 13, 28, 0.78);
   color: #FFFFFF;
   font-family: var(--font-heading);
   font-weight: 800;
-  font-size: 15px;
+  font-size: 14px;
   letter-spacing: 0.6px;
   outline: none;
   transition: all 0.2s ease;
@@ -377,7 +380,7 @@ html, body {
 .mode-buttons-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
+  gap: 10px;
 }
 
 .mode-btn {
@@ -386,23 +389,23 @@ html, body {
   flex-direction: column;
   align-items: flex-start;
   justify-content: space-between;
-  padding: 16px 16px;
-  border-radius: 16px;
+  padding: 12px 14px;
+  border-radius: 14px;
   text-align: left;
   cursor: pointer;
   transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
-  min-height: 98px;
+  min-height: 78px;
 }
 
 .mode-btn.mode-active {
   background: var(--tdcm-gradient-primary);
   border: 1.5px solid rgba(147, 197, 253, 0.7);
-  box-shadow: 0 12px 28px rgba(66, 133, 244, 0.45);
+  box-shadow: 0 10px 24px rgba(66, 133, 244, 0.45);
 }
 
 .mode-btn.mode-active:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 16px 34px rgba(66, 133, 244, 0.65);
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px rgba(66, 133, 244, 0.65);
 }
 
 .mode-btn.mode-locked {
@@ -421,10 +424,10 @@ html, body {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 3px 9px;
+  padding: 2px 8px;
   border-radius: 999px;
   font-family: var(--font-heading);
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -444,15 +447,15 @@ html, body {
 .mode-name {
   font-family: var(--font-heading);
   font-weight: 800;
-  font-size: 14px;
+  font-size: 13px;
   color: #FFFFFF;
-  margin-top: 10px;
+  margin-top: 6px;
 }
 
 .mode-desc {
   font-size: 11px;
   color: rgba(226, 232, 240, 0.8);
-  margin-top: 3px;
+  margin-top: 2px;
 }
 
 /* ==========================================================================
@@ -466,7 +469,7 @@ html, body {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 68px 20px 22px;
+  padding: 54px 16px 14px;
   transition: opacity 0.35s ease;
 }
 
@@ -480,7 +483,7 @@ html, body {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
@@ -488,13 +491,13 @@ html, body {
   pointer-events: auto;
   display: flex;
   align-items: center;
-  gap: 18px;
-  padding: 10px 22px;
-  border-radius: 18px;
-  background: rgba(10, 20, 42, 0.86);
+  gap: 16px;
+  padding: 8px 18px;
+  border-radius: 16px;
+  background: rgba(10, 20, 42, 0.84);
   border: 1px solid var(--tdcm-border);
   backdrop-filter: blur(12px);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45);
 }
 
 .sb-player {
@@ -504,9 +507,9 @@ html, body {
 }
 
 .sb-jersey-badge {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
   background: linear-gradient(135deg, #C8102E 0%, #8A081C 100%);
   border: 1px solid var(--cr7-gold);
   display: flex;
@@ -514,7 +517,7 @@ html, body {
   justify-content: center;
   font-family: var(--font-heading);
   font-weight: 900;
-  font-size: 16px;
+  font-size: 15px;
   color: var(--cr7-gold);
 }
 
@@ -532,21 +535,21 @@ html, body {
 }
 
 .sb-mode-label {
-  font-size: 11px;
+  font-size: 10px;
   color: #93C5FD;
   font-weight: 600;
 }
 
 .sb-divider {
   width: 1px;
-  height: 30px;
+  height: 26px;
   background: rgba(255, 255, 255, 0.15);
 }
 
 .sb-metrics {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
 }
 
 .sb-metric {
@@ -556,7 +559,7 @@ html, body {
 .sb-metric-val {
   font-family: var(--font-heading);
   font-weight: 900;
-  font-size: 18px;
+  font-size: 16px;
   color: #FFFFFF;
 }
 
@@ -565,7 +568,7 @@ html, body {
 }
 
 .sb-metric-lbl {
-  font-size: 10px;
+  font-size: 9px;
   text-transform: uppercase;
   color: #94A3B8;
   font-weight: 700;
@@ -579,8 +582,8 @@ html, body {
 }
 
 .shot-dot {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.18);
   border: 1px solid rgba(255, 255, 255, 0.35);
@@ -608,7 +611,7 @@ html, body {
 /* Center Announcement Banner (GOAL / SAVED / SIUUU!) */
 .center-banner {
   position: fixed;
-  top: 42%;
+  top: 38%;
   left: 50%;
   transform: translate(-50%, -50%) scale(0.85);
   z-index: 25;
@@ -626,7 +629,7 @@ html, body {
 .center-banner-title {
   font-family: var(--font-heading);
   font-weight: 900;
-  font-size: clamp(32px, 6vw, 64px);
+  font-size: clamp(30px, 5.5vw, 58px);
   text-transform: uppercase;
   letter-spacing: 2px;
   text-shadow: 0 10px 30px rgba(0, 0, 0, 0.85);
@@ -649,7 +652,7 @@ html, body {
   margin-top: 6px;
   padding: 6px 18px;
   border-radius: 999px;
-  background: rgba(10, 20, 42, 0.88);
+  background: rgba(10, 20, 42, 0.9);
   border: 1px solid var(--tdcm-border);
   font-family: var(--font-heading);
   font-weight: 800;
@@ -662,30 +665,38 @@ html, body {
   display: flex;
   flex-direction: column;
   align-items: center;
+  gap: 7px;
+}
+
+.hud-subrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   gap: 10px;
+  flex-wrap: wrap;
 }
 
 .shot-style-selector {
   pointer-events: auto;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px;
-  border-radius: 14px;
-  background: rgba(10, 20, 42, 0.88);
+  gap: 6px;
+  padding: 5px;
+  border-radius: 12px;
+  background: rgba(10, 20, 42, 0.86);
   border: 1px solid var(--tdcm-border);
   backdrop-filter: blur(12px);
 }
 
 .style-chip {
-  padding: 8px 14px;
-  border-radius: 10px;
+  padding: 6px 12px;
+  border-radius: 8px;
   border: 1px solid transparent;
   background: transparent;
   color: #CBD5E1;
   font-family: var(--font-heading);
   font-weight: 700;
-  font-size: 12px;
+  font-size: 11px;
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -697,17 +708,47 @@ html, body {
   box-shadow: 0 4px 12px rgba(66, 133, 244, 0.4);
 }
 
+/* Live P (Power) - A (Accuracy) - S (Goal Probability) Pill */
+.pas-metrics-pill {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px;
+  border-radius: 12px;
+  background: rgba(10, 20, 42, 0.88);
+  border: 1px solid rgba(245, 197, 66, 0.45);
+  font-family: var(--font-heading);
+  font-size: 11px;
+  font-weight: 700;
+  color: #E2E8F0;
+  backdrop-filter: blur(12px);
+}
+
+.pas-metrics-pill strong {
+  color: #FFFFFF;
+  font-weight: 900;
+}
+
+.pas-s-highlight strong {
+  color: var(--cr7-gold);
+}
+
+.pas-sep {
+  color: rgba(255, 255, 255, 0.22);
+}
+
 .controls-bar {
   pointer-events: auto;
   width: 100%;
-  max-width: 680px;
+  max-width: 740px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  padding: 12px 18px;
-  border-radius: 18px;
-  background: rgba(10, 20, 42, 0.88);
+  padding: 10px 16px;
+  border-radius: 16px;
+  background: rgba(10, 20, 42, 0.86);
   border: 1px solid var(--tdcm-border);
   backdrop-filter: blur(12px);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
@@ -724,38 +765,75 @@ html, body {
   display: flex;
   justify-content: space-between;
   font-family: var(--font-heading);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   color: #93C5FD;
   text-transform: uppercase;
+  gap: 8px;
 }
 
 .power-bar-track {
   width: 100%;
-  height: 12px;
+  height: 16px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
-  overflow: hidden;
+  background: rgba(15, 23, 42, 0.9);
+  overflow: visible;
   position: relative;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1.5px solid rgba(148, 163, 184, 0.4);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.6);
 }
 
 .power-bar-fill {
   height: 100%;
   width: 0%;
   border-radius: 999px;
-  background: linear-gradient(90deg, #22C55E 0%, #F5C542 70%, #EF4444 100%);
-  transition: width 0.05s linear;
+  background: linear-gradient(90deg, #22C55E 0%, #F5C542 68%, #EF4444 80%, #991B1B 100%);
+  box-shadow: 0 0 12px rgba(245, 197, 66, 0.55);
 }
 
-.shoot-instruction {
-  font-size: 12px;
-  color: #CBD5E1;
-  text-align: center;
+/* ĐIỂM ĐỎ (LINE ĐỎ 5PX) Ở MỐC 80% CỦA THANH LỰC */
+.sweet-spot-line {
+  position: absolute;
+  left: 80%;
+  top: -4px;
+  bottom: -4px;
+  width: 5px;
+  transform: translateX(-50%);
+  background: #FF1E1E;
+  border-radius: 3px;
+  box-shadow:
+    0 0 10px #FF1E1E,
+    0 0 20px rgba(255, 30, 30, 0.95);
+  z-index: 4;
+  animation: sweetSpotPulse 0.9s infinite alternate ease-in-out;
 }
 
-.shoot-instruction strong {
-  color: var(--cr7-gold);
+.sweet-spot-tag {
+  position: absolute;
+  bottom: calc(100% + 3px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #DC2626;
+  color: #FFFFFF;
+  font-family: var(--font-heading);
+  font-size: 9px;
+  font-weight: 900;
+  padding: 1px 5px;
+  border-radius: 4px;
+  white-space: nowrap;
+  border: 1px solid #FCA5A5;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+@keyframes sweetSpotPulse {
+  0% {
+    box-shadow: 0 0 8px #FF1E1E, 0 0 14px rgba(255, 30, 30, 0.8);
+    filter: brightness(1);
+  }
+  100% {
+    box-shadow: 0 0 14px #FF4D4D, 0 0 26px rgba(255, 50, 50, 1);
+    filter: brightness(1.3);
+  }
 }
 
 /* Swipe Trail Canvas Overlay */
@@ -861,9 +939,9 @@ html, body {
    ========================================================================== */
 @media (max-width: 768px) {
   .top-nav-bar {
-    top: 10px;
-    left: 12px;
-    right: 12px;
+    top: 8px;
+    left: 10px;
+    right: 10px;
   }
 
   .brand-sub {
@@ -871,48 +949,48 @@ html, body {
   }
 
   .home-cinematic-badge {
-    top: 58px;
-    font-size: 10px;
-    padding: 5px 12px;
+    top: 48px;
+    font-size: 9px;
+    padding: 4px 10px;
     white-space: nowrap;
   }
 
   #home-screen {
-    padding: 12px 12px 18px;
+    padding: 10px 10px 12px;
   }
 
   .home-card {
-    padding: 16px 16px;
-    border-radius: 18px;
+    padding: 12px 14px;
+    border-radius: 16px;
   }
 
   .home-title-block h1 {
-    font-size: 19px;
+    font-size: 17px;
   }
 
   .home-title-block p {
-    font-size: 12px;
+    font-size: 11px;
   }
 
   .cr7-stat-badge {
-    padding: 6px 10px;
+    padding: 5px 9px;
   }
 
   .mode-buttons-grid {
     grid-template-columns: 1fr;
-    gap: 8px;
+    gap: 6px;
   }
 
   .mode-btn {
     min-height: auto;
-    padding: 12px 14px;
+    padding: 10px 12px;
     flex-direction: row;
     align-items: center;
   }
 
   .mode-name {
     margin-top: 0;
-    font-size: 13px;
+    font-size: 12px;
   }
 
   .mode-desc {
@@ -920,27 +998,27 @@ html, body {
   }
 
   #game-hud {
-    padding: 56px 10px 14px;
+    padding: 48px 10px 10px;
   }
 
   .scoreboard-card {
     width: 100%;
     justify-content: space-between;
-    padding: 8px 12px;
-    gap: 8px;
+    padding: 7px 10px;
+    gap: 6px;
   }
 
   .sb-metrics {
-    gap: 10px;
+    gap: 8px;
   }
 
   .sb-metric-val {
-    font-size: 15px;
+    font-size: 14px;
   }
 
   .controls-bar {
     flex-direction: column;
-    padding: 10px 14px;
+    padding: 9px 12px;
     gap: 8px;
   }
 
@@ -950,6 +1028,6 @@ html, body {
 
   .btn-submit-modal {
     width: 100%;
-    padding: 12px 18px;
+    padding: 11px 16px;
   }
 }
