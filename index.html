@@ -24,7 +24,7 @@
     <div class="brand-pill">
       <span class="brand-dot"></span>
       <span class="brand-title">TDCM ARENA 3D</span>
-      <span class="brand-sub">CR7 SEMI-REALISTIC ENGINE</span>
+      <span class="brand-sub">CR7 ULTRA-HD 5X ENGINE</span>
     </div>
 
     <div class="top-actions">
@@ -38,19 +38,19 @@
   </header>
 
   <!-- ====================================================================
-       MÀN HÌNH HOME (3D CR7 Showcase Loop Running Underneath)
+       MÀN HÌNH HOME (3D CR7 Full-Body Showcase Loop Running Underneath)
        ==================================================================== -->
   <section id="home-screen">
     <div class="home-cinematic-badge">
       <span class="live-pulse"></span>
-      <span>LIVE 3D SHOWCASE • CR7 KNUCKLEBALL &amp; STADIUM ATMOSPHERE</span>
+      <span>LIVE 3D SHOWCASE • CR7 FULL-BODY KNUCKLEBALL &amp; SIUUU!</span>
     </div>
 
     <div class="home-card">
       <div class="home-header-row">
         <div class="home-title-block">
           <h1>CR7 LEGACY 3D SHOOTOUT</h1>
-          <p>Đồ họa 3D bán chân thực • Dáng đứng thương hiệu CR7 • Khán đài vạn người reo hò</p>
+          <p>Đồ họa 3D 5x High-Poly • Trọn bộ động tác Hít thở - Chạy đà - Sút Knuckleball - Ăn mừng SIUUU!</p>
         </div>
 
         <div class="cr7-stat-badge">
@@ -85,7 +85,7 @@
           <span class="mode-tag">🔥 SẴN SÀNG CHƠI</span>
           <div>
             <div class="mode-name">SÚT PHẠT PENALTY 11M</div>
-            <div class="mode-desc">Đối mặt thủ môn 11m • Dáng đứng CR7 thương hiệu</div>
+            <div class="mode-desc">Giữ Space canh vạch đỏ 80% • Ghi bàn S 100%</div>
           </div>
         </button>
 
@@ -162,27 +162,41 @@
 
     <!-- Bottom Controls -->
     <div class="hud-bottom-dock">
-      <!-- Shot Technique Selector -->
-      <div class="shot-style-selector">
-        <button type="button" class="style-chip active" data-style="knuckle">⚡ Knuckleball (CR7)</button>
-        <button type="button" class="style-chip" data-style="curve">🌀 Cứa Lòng Xoáy</button>
-        <button type="button" class="style-chip" data-style="power">🚀 Sút Căng Góc Thượng</button>
+      <!-- Shot Technique Selector & Live P-A-S Metrics -->
+      <div class="hud-subrow">
+        <div class="shot-style-selector">
+          <button type="button" class="style-chip active" data-style="knuckle">⚡ Knuckleball (CR7)</button>
+          <button type="button" class="style-chip" data-style="curve">🌀 Cứa Lòng Xoáy</button>
+          <button type="button" class="style-chip" data-style="power">🚀 Sút Căng Góc Thượng</button>
+        </div>
+
+        <div class="pas-metrics-pill">
+          <span id="pas-p">P (Lực): <strong>--</strong></span>
+          <span class="pas-sep">|</span>
+          <span id="pas-a">A (Chính xác): <strong>--</strong></span>
+          <span class="pas-sep">|</span>
+          <span id="pas-s" class="pas-s-highlight">S (Ghi bàn): <strong>--%</strong></span>
+        </div>
       </div>
 
-      <!-- Power Meter & Shoot Button -->
+      <!-- Power Meter with 80% Red Line (5px) & Hold-to-Shoot Button -->
       <div class="controls-bar">
         <div class="power-meter-wrap">
           <div class="power-meter-header">
-            <span id="aim-hint-text">🎯 KÉO TÂM NGẮM TRONG KHUNG THÀNH HOẶC VUỐT BÓNG ĐỂ SÚT</span>
-            <span id="power-percent-label">LỰC SÚT: 78%</span>
+            <span id="aim-hint-text">🎯 RÊ CHUỘT / PHÍM MŨI TÊN (NHẠY X2) ĐỂ NGẮM • GIỮ SPACE THẢ ĐÚNG VẠCH ĐỎ 80%</span>
+            <span id="power-percent-label">LỰC SÚT: 0% (MỐC ĐỎ: 80%)</span>
           </div>
-          <div class="power-bar-track">
-            <div id="power-bar-fill" class="power-bar-fill" style="width: 78%;"></div>
+          <div class="power-bar-track" id="power-bar-track">
+            <div id="power-bar-fill" class="power-bar-fill" style="width: 0%;"></div>
+            <!-- Điểm đỏ (Line đỏ 5px) ở mốc 80% -->
+            <div class="sweet-spot-line" title="Mốc 80% Hoàn Hảo: P Tốt nhất + A Cao nhất = S 100%">
+              <span class="sweet-spot-tag">80% S:100%</span>
+            </div>
           </div>
         </div>
 
         <button id="btn-shoot-now" class="btn-submit-modal" type="button">
-          ⚽ SÚT NGAY (SPACE / CHẠM)
+          ⚽ GIỮ SPACE / GIỮ NÚT ĐỂ LÊN LỰC
         </button>
       </div>
     </div>
@@ -209,7 +223,7 @@
 
   <!-- Three.js WebGL Library -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <!-- Main Application Script (TDCM Architecture + 3D Engine) -->
+  <!-- Main Application Script (TDCM Architecture + 5x High-Poly 3D Engine) -->
   <script src="app.js"></script>
 </body>
 </html>
