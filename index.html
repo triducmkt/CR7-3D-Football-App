@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>TDCM Arena 3D — CR7 Penalty & Free Kick</title>
+  <!-- Google Fonts per TDCM Frontend Consistency Guide -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- 3D WebGL Stage -->
+  <div id="canvas-container"></div>
+  <div class="stadium-vignette"></div>
+
+  <!-- Interactive Swipe / Aim Canvas for PC & Mobile -->
+  <canvas id="swipe-canvas" class="disabled"></canvas>
+
+  <!-- Top Navigation Bar -->
+  <header class="top-nav-bar">
+    <div class="brand-pill">
+      <span class="brand-dot"></span>
+      <span class="brand-title">TDCM ARENA 3D</span>
+      <span class="brand-sub">CR7 SEMI-REALISTIC ENGINE</span>
+    </div>
+
+    <div class="top-actions">
+      <button id="btn-audio-toggle" class="btn-action-premium-clean" title="Bật/Tắt âm thanh sân vận động">
+        🔊 <span id="audio-label">CĐV: BẬT</span>
+      </button>
+      <button id="btn-back-home" class="btn-action-premium-clean" style="display: none;">
+        🏠 MÀN HÌNH HOME
+      </button>
+    </div>
+  </header>
+
+  <!-- ====================================================================
+       MÀN HÌNH HOME (3D CR7 Showcase Loop Running Underneath)
+       ==================================================================== -->
+  <section id="home-screen">
+    <div class="home-cinematic-badge">
+      <span class="live-pulse"></span>
+      <span>LIVE 3D SHOWCASE • CR7 KNUCKLEBALL &amp; STADIUM ATMOSPHERE</span>
+    </div>
+
+    <div class="home-card">
+      <div class="home-header-row">
+        <div class="home-title-block">
+          <h1>CR7 LEGACY 3D SHOOTOUT</h1>
+          <p>Đồ họa 3D bán chân thực • Dáng đứng thương hiệu CR7 • Khán đài vạn người reo hò</p>
+        </div>
+
+        <div class="cr7-stat-badge">
+          <div class="cr7-number">#7</div>
+          <div class="cr7-meta">
+            <strong id="home-high-score">KỶ LỤC: 0 BÀN</strong>
+            <span id="home-best-streak">Chuỗi thắng: 0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Ô nhập tên cầu thủ -->
+      <div class="player-input-group">
+        <label class="player-input-label" for="player-name-input">TÊN CẦU THỦ TRÊN ÁO ĐẤU &amp; BẢNG ĐIỆN TỬ</label>
+        <div class="player-input-wrap">
+          <span class="player-input-icon">⚽</span>
+          <input
+            type="text"
+            id="player-name-input"
+            class="player-name-input"
+            maxlength="18"
+            placeholder="Nhập tên cầu thủ (VD: RONALDO / ANH ĐỨC)..."
+            value="RONALDO"
+          />
+        </div>
+      </div>
+
+      <!-- 3 Nút Chế độ chơi -->
+      <div class="mode-buttons-grid">
+        <!-- Mode 1: Sút Phạt Penalty 11m (Active) -->
+        <button id="btn-mode-penalty" class="mode-btn mode-active" type="button">
+          <span class="mode-tag">🔥 SẴN SÀNG CHƠI</span>
+          <div>
+            <div class="mode-name">SÚT PHẠT PENALTY 11M</div>
+            <div class="mode-desc">Đối mặt thủ môn 11m • Dáng đứng CR7 thương hiệu</div>
+          </div>
+        </button>
+
+        <!-- Mode 2: Sút Phạt Hàng Rào (Phase 2) -->
+        <button id="btn-mode-freekick" class="mode-btn mode-locked" type="button">
+          <span class="mode-tag">⏳ GIAI ĐOẠN 2</span>
+          <div>
+            <div class="mode-name">SÚT PHẠT HÀNG RÀO</div>
+            <div class="mode-desc">Vượt hàng rào 5 người • Bóng xoáy Knuckleball</div>
+          </div>
+        </button>
+
+        <!-- Mode 3: Sút Tự Do (Phase 2) -->
+        <button id="btn-mode-freestyle" class="mode-btn mode-locked" type="button">
+          <span class="mode-tag">⏳ GIAI ĐOẠN 2</span>
+          <div>
+            <div class="mode-name">SÚT TỰ DO</div>
+            <div class="mode-desc">Tập luyện mọi góc sút &amp; khoảng cách trên sân</div>
+          </div>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================================================================
+       PENALTY 11M GAMEPLAY HUD (PC & MOBILE)
+       ==================================================================== -->
+  <section id="game-hud" class="hidden">
+    <!-- Top Scoreboard -->
+    <div class="scoreboard-row">
+      <div class="scoreboard-card">
+        <div class="sb-player">
+          <div class="sb-jersey-badge">7</div>
+          <div class="sb-player-info">
+            <span id="hud-player-name" class="sb-player-name">RONALDO</span>
+            <span class="sb-mode-label">PENALTY 11M CHALLENGE</span>
+          </div>
+        </div>
+
+        <div class="sb-divider"></div>
+
+        <div class="series-dots" id="series-dots">
+          <span class="shot-dot current"></span>
+          <span class="shot-dot"></span>
+          <span class="shot-dot"></span>
+          <span class="shot-dot"></span>
+          <span class="shot-dot"></span>
+        </div>
+
+        <div class="sb-divider"></div>
+
+        <div class="sb-metrics">
+          <div class="sb-metric">
+            <div id="hud-score" class="sb-metric-val gold">0</div>
+            <div class="sb-metric-lbl">BÀN THẮNG</div>
+          </div>
+          <div class="sb-metric">
+            <div id="hud-streak" class="sb-metric-val">0</div>
+            <div class="sb-metric-lbl">CHUỖI</div>
+          </div>
+          <div class="sb-metric">
+            <div id="hud-speed" class="sb-metric-val">0 <small style="font-size:10px">KM/H</small></div>
+            <div class="sb-metric-lbl">TỐC ĐỘ SÚT</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Center Result Banner -->
+    <div id="center-banner" class="center-banner">
+      <div id="center-banner-title" class="center-banner-title goal">GOAL! SIUUU!</div>
+      <div id="center-banner-sub" class="center-banner-sub">Cú sút găm thẳng góc chữ A • 118 KM/H</div>
+    </div>
+
+    <!-- Bottom Controls -->
+    <div class="hud-bottom-dock">
+      <!-- Shot Technique Selector -->
+      <div class="shot-style-selector">
+        <button type="button" class="style-chip active" data-style="knuckle">⚡ Knuckleball (CR7)</button>
+        <button type="button" class="style-chip" data-style="curve">🌀 Cứa Lòng Xoáy</button>
+        <button type="button" class="style-chip" data-style="power">🚀 Sút Căng Góc Thượng</button>
+      </div>
+
+      <!-- Power Meter & Shoot Button -->
+      <div class="controls-bar">
+        <div class="power-meter-wrap">
+          <div class="power-meter-header">
+            <span id="aim-hint-text">🎯 KÉO TÂM NGẮM TRONG KHUNG THÀNH HOẶC VUỐT BÓNG ĐỂ SÚT</span>
+            <span id="power-percent-label">LỰC SÚT: 78%</span>
+          </div>
+          <div class="power-bar-track">
+            <div id="power-bar-fill" class="power-bar-fill" style="width: 78%;"></div>
+          </div>
+        </div>
+
+        <button id="btn-shoot-now" class="btn-submit-modal" type="button">
+          ⚽ SÚT NGAY (SPACE / CHẠM)
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================================================================
+       TDCM STANDARD MODAL (Thông báo Chế độ / Kết quả loạt sút)
+       ==================================================================== -->
+  <div id="tdcm-modal" class="note-modal-overlay">
+    <div class="note-modal-content">
+      <div class="note-header">
+        <h3 id="modal-title" class="modal-title-premium">THÔNG BÁO CHẾ ĐỘ CHƠI</h3>
+        <button id="modal-close-x" class="modal-close-btn" type="button">&times;</button>
+      </div>
+      <div id="modal-body" class="note-body">
+        Chế độ này sẽ được mở khóa ở giai đoạn tiếp theo.
+      </div>
+      <div class="note-footer">
+        <button id="modal-btn-secondary" class="btn-action-premium-clean" type="button" style="background:#0F1E3A;">ĐÓNG</button>
+        <button id="modal-btn-primary" class="btn-submit-modal" type="button" style="padding:10px 20px;font-size:13px;">CHƠI PENALTY 11M NGAY</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Three.js WebGL Library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- Main Application Script (TDCM Architecture + 3D Engine) -->
+  <script src="app.js"></script>
+</body>
+</html>
