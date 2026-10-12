@@ -245,142 +245,192 @@ function evaluateShotPowerMetrics(powerPct) {
 }
 
 /* ============================================================================
-   3. WEB AUDIO SYNTHESIZER (Stadium Cheering Crowd, Whistle, Kick, Goal SIUUU)
+   3. REAL MP3 STADIUM AUDIO SYSTEM (1-svd.mp3, 2-coi.mp3, 3-sut.mp3, 4-vao.mp3)
+   - Bỏ toàn bộ âm thanh giả lập cũ.
+   - 1-svd.mp3: Âm thanh nền ở trang Home và nền sân vận động (loop), chỉ tắt khi kích hoạt các file mp3 khác ở trang sút.
+   - 2-coi.mp3: Kích hoạt ngay khi kết thúc giữ Space để sút, chỉ phát đúng 1.5 giây.
+   - 3-sut.mp3: Kích hoạt trước 1.0 giây so với thời điểm chân cầu thủ chạm vào quả bóng.
+   - 4-vao.mp3: Kích hoạt ngay khi sút vào (GOAL).
    ============================================================================ */
 const StadiumAudio = {
-  ctx: null,
-  crowdGain: null,
-  isRunning: false,
+  bgmSvd: null,
+  sfxCoi: null,
+  sfxSut: null,
+  sfxVao: null,
+  coiTimer: null,
+  sutTimer: null,
+  resumeTimer: null,
   muted: false,
+  initialized: false,
+
+  init() {
+    if (this.initialized) return;
+    this.initialized = true;
+
+    this.bgmSvd = new Audio("1-svd.mp3");
+    this.bgmSvd.loop = true;
+    this.bgmSvd.volume = 0.65;
+    this.bgmSvd.preload = "auto";
+
+    this.sfxCoi = new Audio("2-coi.mp3");
+    this.sfxCoi.volume = 0.9;
+    this.sfxCoi.preload = "auto";
+
+    this.sfxSut = new Audio("3-sut.mp3");
+    this.sfxSut.volume = 1.0;
+    this.sfxSut.preload = "auto";
+
+    this.sfxVao = new Audio("4-vao.mp3");
+    this.sfxVao.volume = 1.0;
+    this.sfxVao.preload = "auto";
+
+    // Khi 4-vao.mp3 hoặc 3-sut.mp3 kết thúc, tự động kiểm tra để bật lại nhạc nền 1-svd.mp3
+    this.sfxVao.addEventListener("ended", () => {
+      this.checkAndResumeBgm();
+    });
+    this.sfxSut.addEventListener("ended", () => {
+      if (CR7Engine && CR7Engine.phase !== "CELEBRATE" && !CR7Engine.shotData.active) {
+        this.checkAndResumeBgm();
+      }
+    });
+
+    // Thử tự động phát nhạc nền 1-svd.mp3 ngay khi mở trang hoặc ngay khi người dùng tương tác đầu tiên
+    this.ensureContext();
+    const unlockAudio = () => {
+      this.ensureContext();
+    };
+    window.addEventListener("pointerdown", unlockAudio, { once: true });
+    window.addEventListener("keydown", unlockAudio, { once: true });
+    window.addEventListener("touchstart", unlockAudio, { once: true });
+  },
 
   ensureContext() {
-    if (!this.ctx) {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      if (!AudioCtx) return;
-      this.ctx = new AudioCtx();
-      this.startCrowdAmbience();
+    if (!this.initialized) this.init();
+    if (this.muted) return;
+    if (!this.isAnyActionSfxPlaying()) {
+      this.bgmSvd.play().catch(() => {});
     }
-    if (this.ctx && this.ctx.state === "suspended") {
-      this.ctx.resume();
+  },
+
+  isAnyActionSfxPlaying() {
+    const coiPlaying = this.sfxCoi && !this.sfxCoi.paused;
+    const sutPlaying = this.sfxSut && !this.sfxSut.paused;
+    const vaoPlaying = this.sfxVao && !this.sfxVao.paused;
+    return Boolean(coiPlaying || sutPlaying || vaoPlaying);
+  },
+
+  pauseBgmForAction() {
+    if (this.bgmSvd && !this.bgmSvd.paused) {
+      this.bgmSvd.pause();
+    }
+  },
+
+  stopAllActionSfx() {
+    if (this.coiTimer) {
+      clearTimeout(this.coiTimer);
+      this.coiTimer = null;
+    }
+    if (this.sutTimer) {
+      clearTimeout(this.sutTimer);
+      this.sutTimer = null;
+    }
+    if (this.resumeTimer) {
+      clearTimeout(this.resumeTimer);
+      this.resumeTimer = null;
+    }
+    [this.sfxCoi, this.sfxSut, this.sfxVao].forEach((audioEl) => {
+      if (audioEl) {
+        audioEl.pause();
+        audioEl.currentTime = 0;
+      }
+    });
+  },
+
+  checkAndResumeBgm() {
+    if (!this.initialized) this.init();
+    if (this.muted) return;
+    if (!this.isAnyActionSfxPlaying()) {
+      this.bgmSvd.play().catch(() => {});
     }
   },
 
   setMuted(flag) {
+    if (!this.initialized) this.init();
     this.muted = flag;
-    if (this.crowdGain && this.ctx) {
-      this.crowdGain.gain.setTargetAtTime(flag ? 0.0001 : 0.14, this.ctx.currentTime, 0.15);
+    if (flag) {
+      if (this.bgmSvd) this.bgmSvd.pause();
+      this.stopAllActionSfx();
+    } else {
+      this.checkAndResumeBgm();
     }
   },
 
-  startCrowdAmbience() {
-    if (!this.ctx || this.isRunning) return;
-    this.isRunning = true;
+  /**
+   * Kích hoạt chuỗi âm thanh khi người chơi thả nút Space / bắt đầu sút ở trang sút:
+   * 1. Tắt tạm thời 1-svd.mp3
+   * 2. Phát ngay 2-coi.mp3 trong đúng 1.5 giây
+   * 3. Hẹn giờ phát 3-sut.mp3 đúng 1.0 giây trước thời điểm chân cầu thủ chạm bóng
+   */
+  triggerShotAudioSequence(timeToFootContactSec = 1.5) {
+    if (!this.initialized) this.init();
+    if (this.muted) return;
 
-    const sampleRate = this.ctx.sampleRate;
-    const bufferSize = sampleRate * 4;
-    const buffer = this.ctx.createBuffer(1, bufferSize, sampleRate);
-    const data = buffer.getChannelData(0);
-    let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
-    for (let i = 0; i < bufferSize; i++) {
-      const white = Math.random() * 2 - 1;
-      b0 = 0.99886 * b0 + white * 0.0555179;
-      b1 = 0.99332 * b1 + white * 0.0750759;
-      b2 = 0.96900 * b2 + white * 0.1538520;
-      b3 = 0.86650 * b3 + white * 0.3104856;
-      b4 = 0.55000 * b4 + white * 0.5329522;
-      b5 = -0.7616 * b5 - white * 0.0168980;
-      data[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.04;
-      b6 = white * 0.115926;
-    }
+    // Chỉ tắt 1-svd.mp3 và phát hiệu ứng ở các trang sút (không cắt nhạc nền ở màn hình Home)
+    if (AppStore.state.screen === "HOME") return;
 
-    const noise = this.ctx.createBufferSource();
-    noise.buffer = buffer;
-    noise.loop = true;
+    this.stopAllActionSfx();
+    this.pauseBgmForAction();
 
-    const filter = this.ctx.createBiquadFilter();
-    filter.type = "bandpass";
-    filter.frequency.value = 620;
-    filter.Q.value = 0.65;
+    // 1. Phát 2-coi.mp3 ngay lập tức khi kết thúc giữ Space, chỉ phát 1.5 giây
+    this.sfxCoi.currentTime = 0;
+    this.sfxCoi.play().catch(() => {});
+    this.coiTimer = setTimeout(() => {
+      if (this.sfxCoi) {
+        this.sfxCoi.pause();
+        this.sfxCoi.currentTime = 0;
+      }
+      this.coiTimer = null;
+    }, 1500);
 
-    this.crowdGain = this.ctx.createGain();
-    this.crowdGain.gain.value = this.muted ? 0.0001 : 0.14;
-
-    noise.connect(filter);
-    filter.connect(this.crowdGain);
-    this.crowdGain.connect(this.ctx.destination);
-    noise.start();
+    // 2. Phát 3-sut.mp3 trước đúng 1.0 giây so với thời điểm chân cầu thủ chạm bóng
+    const delayBeforeSutMs = Math.max(0, (timeToFootContactSec - 1.0) * 1000);
+    this.sutTimer = setTimeout(() => {
+      if (this.muted || AppStore.state.screen === "HOME") return;
+      this.pauseBgmForAction();
+      this.sfxSut.currentTime = 0;
+      this.sfxSut.play().catch(() => {});
+      this.sutTimer = null;
+    }, delayBeforeSutMs);
   },
 
-  playKick(isSweetSpot = false) {
-    this.ensureContext();
-    if (!this.ctx || this.muted) return;
-    const now = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    osc.type = isSweetSpot ? "triangle" : "sine";
-    osc.frequency.setValueAtTime(isSweetSpot ? 175 : 145, now);
-    osc.frequency.exponentialRampToValueAtTime(32, now + 0.16);
-
-    gain.gain.setValueAtTime(isSweetSpot ? 0.82 : 0.65, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
-
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
-    osc.start(now);
-    osc.stop(now + 0.19);
-  },
-
+  /**
+   * Kích hoạt 4-vao.mp3 ngay khi sút vào (GOAL)
+   */
   playGoalRoar() {
-    this.ensureContext();
-    if (!this.ctx || this.muted) return;
-    const now = this.ctx.currentTime;
-    if (this.crowdGain) {
-      this.crowdGain.gain.cancelScheduledValues(now);
-      this.crowdGain.gain.setValueAtTime(0.16, now);
-      this.crowdGain.gain.linearRampToValueAtTime(0.48, now + 0.18);
-      this.crowdGain.gain.exponentialRampToValueAtTime(0.14, now + 2.8);
+    if (!this.initialized) this.init();
+    if (this.muted || AppStore.state.screen === "HOME") return;
+
+    this.pauseBgmForAction();
+    if (this.sfxCoi && !this.sfxCoi.paused) {
+      this.sfxCoi.pause();
+      this.sfxCoi.currentTime = 0;
     }
 
-    // Synthesize "SIUUU!" stadium eruption
-    const osc = this.ctx.createOscillator();
-    const filter = this.ctx.createBiquadFilter();
-    const gain = this.ctx.createGain();
-    osc.type = "sawtooth";
-    osc.frequency.setValueAtTime(250, now + 0.32);
-    osc.frequency.linearRampToValueAtTime(155, now + 1.35);
-
-    filter.type = "bandpass";
-    filter.frequency.setValueAtTime(980, now + 0.32);
-    filter.Q.value = 2.0;
-
-    gain.gain.setValueAtTime(0.001, now);
-    gain.gain.linearRampToValueAtTime(0.22, now + 0.45);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 1.55);
-
-    osc.connect(filter);
-    filter.connect(gain);
-    gain.connect(this.ctx.destination);
-    osc.start(now + 0.32);
-    osc.stop(now + 1.6);
+    this.sfxVao.currentTime = 0;
+    this.sfxVao.play().catch(() => {});
   },
 
-  playPostOrSave() {
-    this.ensureContext();
-    if (!this.ctx || this.muted) return;
-    const now = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    osc.type = "triangle";
-    osc.frequency.setValueAtTime(320, now);
-    osc.frequency.exponentialRampToValueAtTime(90, now + 0.22);
+  /**
+   * Khi sút trượt / thủ môn cản phá: chờ 3-sut.mp3 và 2-coi.mp3 dứt rồi bật lại nhạc nền 1-svd.mp3
+   */
+  onShotMissOrSave() {
+    if (!this.initialized) this.init();
+    if (this.muted || AppStore.state.screen === "HOME") return;
 
-    gain.gain.setValueAtTime(0.35, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
-
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
-    osc.start(now);
-    osc.stop(now + 0.25);
+    if (this.resumeTimer) clearTimeout(this.resumeTimer);
+    this.resumeTimer = setTimeout(() => {
+      this.checkAndResumeBgm();
+    }, 900);
   }
 };
 
@@ -1617,8 +1667,8 @@ const CR7Engine = {
     const { pelvis, spine, headGroup, leftArm, rightArm, leftLeg, rightLeg } = this.cr7.userData;
 
     if (this.phase === "STEP_CLOSE") {
-      // Phase 1 of Shot: CR7 inhales, shrugs shoulders one last time, and closes feet together (Khép chân chuẩn bị lấy đà)
-      const duration = 0.42;
+      // Phase 1 of Shot (0.50s): CR7 hears whistle (2-coi.mp3), inhales & closes feet together
+      const duration = 0.50;
       const p = Math.min(1, this.phaseTimer / duration);
       const ease = p * p * (3 - 2 * p);
 
@@ -1645,8 +1695,8 @@ const CR7Engine = {
         this.phaseTimer = 0;
       }
     } else if (this.phase === "RUNUP") {
-      // Phase 2: Curved 4-Step Explosive Run-up & Deep Plant Foot Lunge beside the Ball
-      const duration = 0.72;
+      // Phase 2 (1.00s): 3-sut.mp3 plays at start of this 1.00s run-up, so foot touches ball at exact 1.00s mark!
+      const duration = 1.00;
       const p = Math.min(1, this.phaseTimer / duration);
       const ease = p * p * (3 - 2 * p);
 
@@ -1870,13 +1920,17 @@ const CR7Engine = {
       outcomeType
     };
 
-    // Start with STEP_CLOSE (Khép chân) -> RUNUP -> KICK!
+    // Kích hoạt chuỗi âm thanh sút bóng:
+    // Tổng thời gian từ lúc thả Space đến lúc chân chạm bóng là STEP_CLOSE (0.50s) + RUNUP (1.00s) = 1.50s.
+    // -> 2-coi.mp3 phát ngay lập tức trong 1.5s; 3-sut.mp3 phát ở mốc 0.50s (trước 1.0s so với lúc chân chạm bóng ở 1.50s)
+    StadiumAudio.triggerShotAudioSequence(1.50);
+
+    // Start with STEP_CLOSE (0.50s) -> RUNUP (1.00s) -> KICK!
     this.phase = "STEP_CLOSE";
     this.phaseTimer = 0;
   },
 
   launchBallPhysics() {
-    StadiumAudio.playKick(this.shotData.isSweetSpot);
     this.shotData.active = true;
     this.shotData.elapsed = 0;
   },
@@ -1967,7 +2021,7 @@ const CR7Engine = {
         UIController.showCenterBanner(bannerTitle, bannerSub, true);
       }
     } else {
-      StadiumAudio.playPostOrSave();
+      StadiumAudio.onShotMissOrSave();
       this.ball.position.z = 1.8;
       this.ball.position.x *= 1.25;
       this.phase = "RESETTING";
@@ -2007,10 +2061,13 @@ const CR7Engine = {
     if (AppStore.state.screen === "PENALTY_11M") {
       AppStore.dispatchAction({ type: "SET_POWER", payload: 0 });
     }
+    StadiumAudio.checkAndResumeBgm();
     this.applySignatureStance(this.clock.getElapsedTime());
   },
 
   enterHomeMode() {
+    StadiumAudio.stopAllActionSfx();
+    StadiumAudio.checkAndResumeBgm();
     this.resetToStance();
     if (this.aimReticle) this.aimReticle.visible = false;
     this.homeLoopTimer = 0.2;
@@ -2570,6 +2627,7 @@ const UIController = {
    6. INITIALIZE APPLICATION ON DOM READY
    ============================================================================ */
 window.addEventListener("DOMContentLoaded", () => {
+  StadiumAudio.init();
   AppStore.init();
   UIController.init();
   CR7Engine.init();
