@@ -245,20 +245,23 @@ function evaluateShotPowerMetrics(powerPct) {
 }
 
 /* ============================================================================
-   3. REAL MP3 STADIUM AUDIO SYSTEM (1-svd.mp3, 2-coi.mp3, 3-sut.mp3, 4-vao.mp3)
-   - Bỏ toàn bộ âm thanh giả lập cũ.
+   3. REAL MP3 STADIUM AUDIO SYSTEM
    - 1-svd.mp3: Âm thanh nền ở trang Home và nền sân vận động (loop), chỉ tắt khi kích hoạt các file mp3 khác ở trang sút.
    - 2-coi.mp3: Kích hoạt ngay khi kết thúc giữ Space để sút, chỉ phát đúng 1.5 giây.
-   - 3-sut.mp3: Kích hoạt trước 1.0 giây so với thời điểm chân cầu thủ chạm vào quả bóng.
-   - 4-vao.mp3: Kích hoạt ngay khi sút vào (GOAL).
+   - 3-sut.mp3: Kích hoạt ngay thời điểm chân cầu thủ chạm vào quả bóng.
+   - 4-vao.mp3 & 4-cheer.mp3: Kích hoạt song song cùng lúc ngay khi ghi bàn (GOAL), và kết thúc ngay khi kích hoạt 5-siu.mp3.
+   - 5-siu.mp3: Kích hoạt ngay khi cầu thủ bắt đầu thực hiện animation ăn mừng SIUUU (sau 3 giây chạy dang tay).
+   - 4-nogoal.mp3: Kích hoạt ngay khi sút hụt ra ngoài hoặc không vào (no score).
    ============================================================================ */
 const StadiumAudio = {
   bgmSvd: null,
   sfxCoi: null,
   sfxSut: null,
   sfxVao: null,
+  sfxCheer: null,
+  sfxSiu: null,
+  sfxNoGoal: null,
   coiTimer: null,
-  sutTimer: null,
   resumeTimer: null,
   muted: false,
   initialized: false,
@@ -284,14 +287,23 @@ const StadiumAudio = {
     this.sfxVao.volume = 1.0;
     this.sfxVao.preload = "auto";
 
-    // Khi 4-vao.mp3 hoặc 3-sut.mp3 kết thúc, tự động kiểm tra để bật lại nhạc nền 1-svd.mp3
-    this.sfxVao.addEventListener("ended", () => {
-      this.checkAndResumeBgm();
-    });
-    this.sfxSut.addEventListener("ended", () => {
-      if (CR7Engine && CR7Engine.phase !== "CELEBRATE" && !CR7Engine.shotData.active) {
+    this.sfxCheer = new Audio("4-cheer.mp3");
+    this.sfxCheer.volume = 0.92;
+    this.sfxCheer.preload = "auto";
+
+    this.sfxSiu = new Audio("5-siu.mp3");
+    this.sfxSiu.volume = 1.0;
+    this.sfxSiu.preload = "auto";
+
+    this.sfxNoGoal = new Audio("4-nogoal.mp3");
+    this.sfxNoGoal.volume = 1.0;
+    this.sfxNoGoal.preload = "auto";
+
+    // Khi 5-siu.mp3 hoặc 4-nogoal.mp3 kết thúc, tự động kiểm tra để bật lại nhạc nền 1-svd.mp3
+    [this.sfxSiu, this.sfxNoGoal].forEach((audioEl) => {
+      audioEl.addEventListener("ended", () => {
         this.checkAndResumeBgm();
-      }
+      });
     });
 
     // Thử tự động phát nhạc nền 1-svd.mp3 ngay khi mở trang hoặc ngay khi người dùng tương tác đầu tiên
@@ -312,11 +324,19 @@ const StadiumAudio = {
     }
   },
 
+  getActionAudioList() {
+    return [
+      this.sfxCoi,
+      this.sfxSut,
+      this.sfxVao,
+      this.sfxCheer,
+      this.sfxSiu,
+      this.sfxNoGoal
+    ];
+  },
+
   isAnyActionSfxPlaying() {
-    const coiPlaying = this.sfxCoi && !this.sfxCoi.paused;
-    const sutPlaying = this.sfxSut && !this.sfxSut.paused;
-    const vaoPlaying = this.sfxVao && !this.sfxVao.paused;
-    return Boolean(coiPlaying || sutPlaying || vaoPlaying);
+    return this.getActionAudioList().some((audioEl) => audioEl && !audioEl.paused);
   },
 
   pauseBgmForAction() {
@@ -330,15 +350,11 @@ const StadiumAudio = {
       clearTimeout(this.coiTimer);
       this.coiTimer = null;
     }
-    if (this.sutTimer) {
-      clearTimeout(this.sutTimer);
-      this.sutTimer = null;
-    }
     if (this.resumeTimer) {
       clearTimeout(this.resumeTimer);
       this.resumeTimer = null;
     }
-    [this.sfxCoi, this.sfxSut, this.sfxVao].forEach((audioEl) => {
+    this.getActionAudioList().forEach((audioEl) => {
       if (audioEl) {
         audioEl.pause();
         audioEl.currentTime = 0;
@@ -366,22 +382,15 @@ const StadiumAudio = {
   },
 
   /**
-   * Kích hoạt chuỗi âm thanh khi người chơi thả nút Space / bắt đầu sút ở trang sút:
-   * 1. Tắt tạm thời 1-svd.mp3
-   * 2. Phát ngay 2-coi.mp3 trong đúng 1.5 giây
-   * 3. Hẹn giờ phát 3-sut.mp3 đúng 1.0 giây trước thời điểm chân cầu thủ chạm bóng
+   * 1. Kích hoạt 2-coi.mp3 ngay khi kết thúc giữ Space để sút (chỉ phát đúng 1.5 giây)
    */
-  triggerShotAudioSequence(timeToFootContactSec = 1.5) {
+  playWhistleOnShotStart() {
     if (!this.initialized) this.init();
-    if (this.muted) return;
-
-    // Chỉ tắt 1-svd.mp3 và phát hiệu ứng ở các trang sút (không cắt nhạc nền ở màn hình Home)
-    if (AppStore.state.screen === "HOME") return;
+    if (this.muted || AppStore.state.screen === "HOME") return;
 
     this.stopAllActionSfx();
     this.pauseBgmForAction();
 
-    // 1. Phát 2-coi.mp3 ngay lập tức khi kết thúc giữ Space, chỉ phát 1.5 giây
     this.sfxCoi.currentTime = 0;
     this.sfxCoi.play().catch(() => {});
     this.coiTimer = setTimeout(() => {
@@ -391,46 +400,85 @@ const StadiumAudio = {
       }
       this.coiTimer = null;
     }, 1500);
-
-    // 2. Phát 3-sut.mp3 trước đúng 1.0 giây so với thời điểm chân cầu thủ chạm bóng
-    const delayBeforeSutMs = Math.max(0, (timeToFootContactSec - 1.0) * 1000);
-    this.sutTimer = setTimeout(() => {
-      if (this.muted || AppStore.state.screen === "HOME") return;
-      this.pauseBgmForAction();
-      this.sfxSut.currentTime = 0;
-      this.sfxSut.play().catch(() => {});
-      this.sutTimer = null;
-    }, delayBeforeSutMs);
   },
 
   /**
-   * Kích hoạt 4-vao.mp3 ngay khi sút vào (GOAL)
+   * 2. CẢI TIẾN 1: Kích hoạt 3-sut.mp3 NGAY THỜI ĐIỂM chân cầu thủ chạm vào quả bóng
    */
-  playGoalRoar() {
+  playBallStrike() {
     if (!this.initialized) this.init();
     if (this.muted || AppStore.state.screen === "HOME") return;
 
     this.pauseBgmForAction();
+    this.sfxSut.currentTime = 0;
+    this.sfxSut.play().catch(() => {});
+  },
+
+  /**
+   * 3. CẢI TIẾN 2: Kích hoạt song song cùng lúc 4-vao.mp3 và 4-cheer.mp3 ngay khi ghi bàn (GOAL)
+   */
+  playGoalAndCheer() {
+    if (!this.initialized) this.init();
+    if (this.muted || AppStore.state.screen === "HOME") return;
+
+    this.pauseBgmForAction();
+    if (this.coiTimer) {
+      clearTimeout(this.coiTimer);
+      this.coiTimer = null;
+    }
     if (this.sfxCoi && !this.sfxCoi.paused) {
       this.sfxCoi.pause();
       this.sfxCoi.currentTime = 0;
     }
 
     this.sfxVao.currentTime = 0;
+    this.sfxCheer.currentTime = 0;
     this.sfxVao.play().catch(() => {});
+    this.sfxCheer.play().catch(() => {});
   },
 
   /**
-   * Khi sút trượt / thủ môn cản phá: chờ 3-sut.mp3 và 2-coi.mp3 dứt rồi bật lại nhạc nền 1-svd.mp3
+   * 4. CẢI TIẾN 2 & 4: Kết thúc ngay 4-vao.mp3 + 4-cheer.mp3 và kích hoạt ngay 5-siu.mp3
+   *    khi cầu thủ chuyển sang animation ăn mừng SIUUU (sau 3 giây chạy dang tay)
    */
-  onShotMissOrSave() {
+  playSiuCelebration() {
     if (!this.initialized) this.init();
     if (this.muted || AppStore.state.screen === "HOME") return;
 
-    if (this.resumeTimer) clearTimeout(this.resumeTimer);
-    this.resumeTimer = setTimeout(() => {
-      this.checkAndResumeBgm();
-    }, 900);
+    this.pauseBgmForAction();
+
+    // Kết thúc ngay lập tức 4-vao.mp3 và 4-cheer.mp3
+    [this.sfxVao, this.sfxCheer].forEach((audioEl) => {
+      if (audioEl) {
+        audioEl.pause();
+        audioEl.currentTime = 0;
+      }
+    });
+
+    // Kích hoạt ngay 5-siu.mp3
+    this.sfxSiu.currentTime = 0;
+    this.sfxSiu.play().catch(() => {});
+  },
+
+  /**
+   * 5. CẢI TIẾN 5: Kích hoạt 4-nogoal.mp3 ngay khi sút hụt ra ngoài hoặc không vào (no score)
+   */
+  playNoGoal() {
+    if (!this.initialized) this.init();
+    if (this.muted || AppStore.state.screen === "HOME") return;
+
+    this.pauseBgmForAction();
+    if (this.coiTimer) {
+      clearTimeout(this.coiTimer);
+      this.coiTimer = null;
+    }
+    if (this.sfxCoi && !this.sfxCoi.paused) {
+      this.sfxCoi.pause();
+      this.sfxCoi.currentTime = 0;
+    }
+
+    this.sfxNoGoal.currentTime = 0;
+    this.sfxNoGoal.play().catch(() => {});
   }
 };
 
@@ -1761,49 +1809,108 @@ const CR7Engine = {
 
       leftArm.shoulderPivot.rotation.set(-0.55 + whip * 0.85, 0, -0.88 + whip * 0.35);
       rightArm.shoulderPivot.rotation.set(0.35 - whip * 0.65, 0, 0.52);
-    } else if (this.phase === "CELEBRATE") {
-      // Phase 4: Authentic CR7 "SIUUU!" Celebration (Run -> High Jump -> 180 Spin -> Wide Power Landing + Arm Chop)
-      const totalDur = 1.85;
+    } else if (this.phase === "CELEBRATE_RUN") {
+      // CẢI TIẾN 3A: Chạy dang tay ăn mừng quanh sân trong đúng 3.0 giây sau khi ghi bàn
+      // Trong suốt 3 giây này, 4-vao.mp3 và 4-cheer.mp3 đang phát song song
+      const runDur = 3.0;
+      const p = Math.min(1, this.phaseTimer / runDur);
+
+      // Quỹ đạo chạy vòng cung quanh sân từ (-0.25, 11.08) lượn rộng sang phải (+2.35m), vòng lên gần khung thành rồi lượn về giữa sân
+      const angle = p * Math.PI * 1.65;
+      const prevAngle = Math.max(0, (this.phaseTimer - dt) / runDur) * Math.PI * 1.65;
+      const curX = -0.25 + Math.sin(angle) * 2.35;
+      const curZ = 11.08 - Math.sin(p * Math.PI) * 2.65;
+      const prevX = -0.25 + Math.sin(prevAngle) * 2.35;
+      const prevZ = 11.08 - Math.sin(Math.max(0, (this.phaseTimer - dt) / runDur) * Math.PI) * 2.65;
+
+      this.cr7.position.x = curX;
+      this.cr7.position.z = curZ;
+
+      const dx = curX - prevX;
+      const dz = curZ - prevZ;
+      if (Math.hypot(dx, dz) > 0.0001) {
+        this.cr7.rotation.y = Math.atan2(-dx, -dz);
+      }
+
+      // Nhịp bước chân chạy nước rút sôi động
+      const stride = Math.sin(this.phaseTimer * Math.PI * 8.0);
+      pelvis.position.y = 0.94 + Math.abs(stride) * 0.075;
+      pelvis.rotation.y = stride * 0.08;
+
+      // Thân người nghiêng lượn theo khúc cua (banking) + ưỡn ngực tự hào
+      const bankAngle = Math.cos(angle) * -0.16;
+      spine.rotation.set(0.14, 0, bankAngle);
+      spine.scale.set(1.03, 1.0, 1.03);
+
+      // Đầu ngẩng cao nhìn quanh khán đài ăn mừng
+      headGroup.rotation.set(-0.14, Math.sin(p * Math.PI * 3.0) * 0.36, 0);
+
+      // Hai chân sải bước chạy dài năng động
+      leftLeg.hipPivot.rotation.set(stride * 0.82, 0, -0.06);
+      rightLeg.hipPivot.rotation.set(-stride * 0.82, 0, 0.06);
+      leftLeg.kneePivot.rotation.x = Math.max(0.06, -stride * 0.95);
+      rightLeg.kneePivot.rotation.x = Math.max(0.06, stride * 0.95);
+
+      // HAI TAY DANG RỘNG NGANG VAI NHƯ CÁNH CHIM (Chạy dang tay ăn mừng đặc trưng)
+      const wingWave = Math.sin(this.phaseTimer * Math.PI * 4.0) * 0.08;
+      leftArm.shoulderPivot.position.y = 0.59;
+      rightArm.shoulderPivot.position.y = 0.59;
+      leftArm.shoulderPivot.rotation.set(0.08, -0.15, -1.36 + wingWave);
+      rightArm.shoulderPivot.rotation.set(0.08, 0.15, 1.36 - wingWave);
+      leftArm.elbowPivot.rotation.x = -0.14;
+      rightArm.elbowPivot.rotation.x = -0.14;
+
+      if (p >= 1) {
+        // Đủ 3 giây chạy dang tay -> Chuyển ngay sang animation ăn mừng SIUUUUU
+        // Đồng thời kết thúc ngay 4-vao.mp3 + 4-cheer.mp3 và kích hoạt ngay 5-siu.mp3!
+        this.phase = "CELEBRATE_SIU";
+        this.phaseTimer = 0;
+        StadiumAudio.playSiuCelebration();
+      }
+    } else if (this.phase === "CELEBRATE_SIU") {
+      // CẢI TIẾN 3B & 4: Thực hiện animation ăn mừng SIUUUUU giống CR7 ngoài đời (kèm âm thanh 5-siu.mp3)
+      const totalDur = 2.15;
       const p = Math.min(1, this.phaseTimer / totalDur);
+      const startX = this.cr7.position.x;
 
-      if (p < 0.26) {
-        // 1. Short celebratory sprint steps toward right side
-        const runP = p / 0.26;
-        this.cr7.position.x = -0.25 + runP * 0.65;
-        this.cr7.position.z = 11.08 + runP * 0.55;
-        this.cr7.rotation.y = 0.35;
-        const s = Math.sin(runP * Math.PI * 2);
-        leftLeg.hipPivot.rotation.set(s * 0.6, 0, -0.08);
-        rightLeg.hipPivot.rotation.set(-s * 0.6, 0, 0.08);
-        leftArm.shoulderPivot.rotation.set(-0.8, 0, -0.4);
-        rightArm.shoulderPivot.rotation.set(-0.8, 0, 0.4);
-      } else if (p < 0.64) {
-        // 2. Massive vertical leap + mid-air 180-degree spin + arms crossed at chest
-        const airP = (p - 0.26) / 0.38;
+      if (p < 0.16) {
+        // 1. Nhịp dậm nhảy lấy đà cực mạnh
+        const prepP = p / 0.16;
+        pelvis.position.y = 0.94 - Math.sin(prepP * Math.PI) * 0.10;
+        spine.rotation.set(0.18 * (1 - prepP), 0, 0);
+        leftLeg.hipPivot.rotation.set(-0.22 * prepP, 0, -0.12);
+        rightLeg.hipPivot.rotation.set(0.22 * prepP, 0, 0.12);
+        leftLeg.kneePivot.rotation.x = 0.35 * prepP;
+        rightLeg.kneePivot.rotation.x = 0.35 * prepP;
+        leftArm.shoulderPivot.rotation.set(0.35 * prepP, 0, -0.45);
+        rightArm.shoulderPivot.rotation.set(0.35 * prepP, 0, 0.45);
+      } else if (p < 0.54) {
+        // 2. Bật nhảy vút lên không trung + Xoay người 180 độ trên không + Thu 2 tay trước ngực
+        const airP = (p - 0.16) / 0.38;
         const arc = Math.sin(airP * Math.PI);
-        pelvis.position.y = 0.96 + arc * 0.86;
-        this.cr7.rotation.y = 0.35 + airP * (Math.PI - 0.35); // Spins to face camera/crowd!
+        pelvis.position.y = 0.96 + arc * 0.88;
+        this.cr7.position.x = THREE.MathUtils.lerp(startX, 0.25, 0.08);
+        this.cr7.rotation.y = airP * Math.PI; // Xoay 180 độ trên không trung!
 
-        // Tuck knees slightly in mid-air
+        // Co nhẹ 2 gối trên không
         leftLeg.hipPivot.rotation.set(-0.35 * arc, 0, -0.18 - airP * 0.1);
         rightLeg.hipPivot.rotation.set(-0.35 * arc, 0, 0.18 + airP * 0.1);
         leftLeg.kneePivot.rotation.x = 0.55 * arc;
         rightLeg.kneePivot.rotation.x = 0.55 * arc;
 
-        // Gather arms up in front of chest before the chop
+        // Thu 2 tay chéo lên trước ngực chuẩn bị vung xuống
         leftArm.shoulderPivot.rotation.set(-1.25 * arc, 0.4 * arc, -0.35);
         rightArm.shoulderPivot.rotation.set(-1.25 * arc, -0.4 * arc, 0.35);
         leftArm.elbowPivot.rotation.x = -0.95 * arc;
         rightArm.elbowPivot.rotation.x = -0.95 * arc;
       } else {
-        // 3. BOOM! Land in wide A-stance + Chop arms fiercely down and out ("SIUUUUU!")
-        const landP = Math.min(1, (p - 0.64) / 0.22);
-        this.cr7.rotation.y = Math.PI; // Facing crowd/camera showing front & side profile
+        // 3. Tiếp đất vững chãi dáng chữ A + Vung chém mạnh 2 tay xuống sau hông hét vang "SIUUUUU!"
+        const landP = Math.min(1, (p - 0.54) / 0.22);
+        this.cr7.rotation.y = Math.PI;
         const kneeAbsorb = Math.sin(landP * Math.PI) * 0.12;
         pelvis.position.y = 0.93 - kneeAbsorb * 0.4;
         pelvis.rotation.y = 0;
 
-        // Chest puffed out, head tilted slightly back roaring "SIUUU!"
         spine.rotation.set(-0.14 * landP, 0, 0);
         headGroup.rotation.set(-0.22 * landP, 0, 0);
 
@@ -1812,11 +1919,51 @@ const CR7Engine = {
         leftLeg.kneePivot.rotation.x = kneeAbsorb;
         rightLeg.kneePivot.rotation.x = kneeAbsorb;
 
-        // Arms chop from up high straight down and back to the sides
         leftArm.shoulderPivot.rotation.set(0.28 * landP, 0, -0.48 * landP);
         rightArm.shoulderPivot.rotation.set(0.28 * landP, 0, 0.48 * landP);
         leftArm.elbowPivot.rotation.x = -0.1;
         rightArm.elbowPivot.rotation.x = -0.1;
+      }
+
+      if (p >= 1) {
+        this.resetToStance();
+      }
+    } else if (this.phase === "DISAPPOINTED") {
+      // CẢI TIẾN 3C: Đứng lắc đầu thất vọng trong đúng 2.0 giây nếu không ghi bàn (kèm 4-nogoal.mp3)
+      const disDur = 2.0;
+      const p = Math.min(1, this.phaseTimer / disDur);
+      const easeIn = Math.min(1, this.phaseTimer / 0.25);
+
+      this.cr7.position.x = -0.25;
+      this.cr7.position.z = 11.08;
+      this.cr7.rotation.y = -0.12 * easeIn;
+
+      // Hạ thấp vai thở dài thất vọng, chống tay lên hông
+      pelvis.position.y = 0.94;
+      pelvis.rotation.set(0, 0, 0);
+      spine.rotation.set(0.22 * easeIn, 0, -0.04 * easeIn);
+      spine.scale.set(1, 0.98, 1);
+
+      // Cúi đầu xuống và LẮC ĐẦU QUA LẠI THẤT VỌNG liên tục trong 2 giây
+      const headShake = Math.sin(this.phaseTimer * Math.PI * 5.5) * 0.42 * (1 - p * 0.2);
+      headGroup.rotation.set(0.32 * easeIn, headShake, Math.sin(this.phaseTimer * Math.PI * 5.5) * 0.06);
+
+      // Hai tay chống hông tiếc nuối
+      leftArm.shoulderPivot.position.y = 0.555;
+      rightArm.shoulderPivot.position.y = 0.555;
+      leftArm.shoulderPivot.rotation.set(0.18 * easeIn, 0, -0.42 * easeIn);
+      rightArm.shoulderPivot.rotation.set(0.18 * easeIn, 0, 0.42 * easeIn);
+      leftArm.elbowPivot.rotation.x = -0.92 * easeIn;
+      rightArm.elbowPivot.rotation.x = -0.92 * easeIn;
+
+      // Chân đứng chùng gối tiếc nuối
+      leftLeg.hipPivot.rotation.set(0.04, 0, -0.14);
+      rightLeg.hipPivot.rotation.set(-0.06, 0, 0.16);
+      leftLeg.kneePivot.rotation.x = 0.05;
+      rightLeg.kneePivot.rotation.x = 0.18 * easeIn;
+
+      if (p >= 1) {
+        this.resetToStance();
       }
     }
   },
@@ -1920,10 +2067,8 @@ const CR7Engine = {
       outcomeType
     };
 
-    // Kích hoạt chuỗi âm thanh sút bóng:
-    // Tổng thời gian từ lúc thả Space đến lúc chân chạm bóng là STEP_CLOSE (0.50s) + RUNUP (1.00s) = 1.50s.
-    // -> 2-coi.mp3 phát ngay lập tức trong 1.5s; 3-sut.mp3 phát ở mốc 0.50s (trước 1.0s so với lúc chân chạm bóng ở 1.50s)
-    StadiumAudio.triggerShotAudioSequence(1.50);
+    // Kích hoạt 2-coi.mp3 ngay lập tức khi kết thúc giữ Space (phát 1.5s)
+    StadiumAudio.playWhistleOnShotStart();
 
     // Start with STEP_CLOSE (0.50s) -> RUNUP (1.00s) -> KICK!
     this.phase = "STEP_CLOSE";
@@ -1933,6 +2078,8 @@ const CR7Engine = {
   launchBallPhysics() {
     this.shotData.active = true;
     this.shotData.elapsed = 0;
+    // CẢI TIẾN 1: Kích hoạt 3-sut.mp3 NGAY THỜI ĐIỂM chân cầu thủ chạm vào quả bóng!
+    StadiumAudio.playBallStrike();
   },
 
   updateBallAndKeeper(dt) {
@@ -2005,8 +2152,12 @@ const CR7Engine = {
     if (outcomeType === "GOAL") {
       this.netRippleIntensity = 1.1;
       this.netImpactPoint.copy(targetPos);
-      StadiumAudio.playGoalRoar();
-      this.phase = "CELEBRATE";
+
+      // CẢI TIẾN 2: Kích hoạt song song 4-vao.mp3 và 4-cheer.mp3 ngay khi ghi bàn
+      StadiumAudio.playGoalAndCheer();
+
+      // CẢI TIẾN 3: Bắt đầu bằng 3.0 giây chạy dang tay ăn mừng quanh sân rồi mới chuyển sang SIUUUUU
+      this.phase = "CELEBRATE_RUN";
       this.phaseTimer = 0;
 
       if (!isHome) {
@@ -2021,10 +2172,13 @@ const CR7Engine = {
         UIController.showCenterBanner(bannerTitle, bannerSub, true);
       }
     } else {
-      StadiumAudio.onShotMissOrSave();
+      // CẢI TIẾN 5: Kích hoạt 4-nogoal.mp3 ngay khi sút hụt ra ngoài hoặc không vào (no score)
+      StadiumAudio.playNoGoal();
       this.ball.position.z = 1.8;
       this.ball.position.x *= 1.25;
-      this.phase = "RESETTING";
+
+      // CẢI TIẾN 3: Đứng lắc đầu thất vọng trong 2.0 giây nếu không ghi bàn
+      this.phase = "DISAPPOINTED";
       this.phaseTimer = 0;
 
       if (!isHome) {
@@ -2041,10 +2195,6 @@ const CR7Engine = {
         UIController.showCenterBanner("KHÔNG VÀO!", reason, false);
       }
     }
-
-    setTimeout(() => {
-      this.resetToStance();
-    }, isHome ? 2150 : 2350);
   },
 
   resetToStance() {
@@ -2087,6 +2237,7 @@ const CR7Engine = {
     const dt = Math.min(0.05, this.clock.getDelta());
     const elapsed = this.clock.getElapsedTime();
     const isHome = AppStore.state.screen === "HOME";
+    const isCelebrating = this.phase === "CELEBRATE_RUN" || this.phase === "CELEBRATE_SIU";
 
     this.phaseTimer += dt;
 
@@ -2134,7 +2285,7 @@ const CR7Engine = {
     // 4. Animate Cheering Crowd & Camera Flashes
     if (this.crowdInstanced) {
       const dummy = new THREE.Object3D();
-      const excitement = this.phase === "CELEBRATE" ? 2.5 : 1.0;
+      const excitement = isCelebrating ? 2.5 : 1.0;
       for (let i = 0; i < this.crowdData.length; i++) {
         const fan = this.crowdData[i];
         const bounce = Math.abs(Math.sin(elapsed * fan.speed * excitement + fan.phase)) * fan.amp * excitement;
@@ -2147,10 +2298,9 @@ const CR7Engine = {
     }
 
     if (this.flashParticles) {
-      this.flashParticles.material.opacity =
-        this.phase === "CELEBRATE"
-          ? 0.68 + Math.sin(elapsed * 36) * 0.32
-          : 0.25 + Math.sin(elapsed * 12) * 0.2;
+      this.flashParticles.material.opacity = isCelebrating
+        ? 0.68 + Math.sin(elapsed * 36) * 0.32
+        : 0.25 + Math.sin(elapsed * 12) * 0.2;
     }
 
     // 5. CẢI TIẾN 4: Animate Blinking / Pulsing Multi-Ring Aim Reticle
@@ -2185,25 +2335,26 @@ const CR7Engine = {
       centerCore.scale.set(coreScale, coreScale, 1);
     }
 
-    // 6. CẢI TIẾN 2: Full-Body Camera Framing (Shows 100% of CR7 from head to boots on pitch)
+    // 6. CẢI TIẾN 2: Full-Body Camera Framing (Shows 100% of CR7 from head to boots on pitch, smoothly tracking celebration run)
     const isPortrait = window.innerHeight > window.innerWidth;
     const portraitBackOffset = isPortrait ? 2.4 : 0.0;
+    const followX = isCelebrating && this.cr7 ? this.cr7.position.x * 0.45 : 0;
 
     if (isHome) {
       const swayX = Math.sin(elapsed * 0.5) * 0.75;
       const targetZ =
-        (this.phase === "KICK" || this.phase === "CELEBRATE" ? 16.0 : 18.0) + portraitBackOffset;
-      this.camera.position.x = THREE.MathUtils.lerp(this.camera.position.x, -0.45 + swayX, 0.06);
+        (this.phase === "KICK" || isCelebrating ? 16.0 : 18.0) + portraitBackOffset;
+      this.camera.position.x = THREE.MathUtils.lerp(this.camera.position.x, -0.45 + swayX + followX * 0.5, 0.06);
       this.camera.position.y = THREE.MathUtils.lerp(this.camera.position.y, 1.54, 0.06);
       this.camera.position.z = THREE.MathUtils.lerp(this.camera.position.z, targetZ, 0.06);
-      this.camera.lookAt(0, 1.02, 2.2);
+      this.camera.lookAt(followX, 1.02, 2.2);
     } else {
       const cfg = GAME_MODE_FIELD_MAP.PENALTY_11M;
       const targetZ = (this.shotData.active ? 15.2 : cfg.cameraOffset.z) + portraitBackOffset;
-      this.camera.position.x = THREE.MathUtils.lerp(this.camera.position.x, cfg.cameraOffset.x, 0.08);
+      this.camera.position.x = THREE.MathUtils.lerp(this.camera.position.x, cfg.cameraOffset.x + followX * 0.4, 0.08);
       this.camera.position.y = THREE.MathUtils.lerp(this.camera.position.y, cfg.cameraOffset.y, 0.08);
       this.camera.position.z = THREE.MathUtils.lerp(this.camera.position.z, targetZ, 0.08);
-      this.camera.lookAt(cfg.cameraLookAt.x, cfg.cameraLookAt.y, cfg.cameraLookAt.z);
+      this.camera.lookAt(cfg.cameraLookAt.x + followX, cfg.cameraLookAt.y, cfg.cameraLookAt.z);
     }
 
     this.renderer.render(this.scene, this.camera);
