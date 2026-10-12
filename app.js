@@ -27,9 +27,9 @@ const GAME_MODE_FIELD_MAP = {
     title: "Sút Phạt Penalty 11m",
     distanceMeters: 11,
     unlocked: true,
-    // Camera moved further back & framed to show 100% full body of CR7 (head to studded boots)
-    cameraOffset: { x: -0.42, y: 1.58, z: 18.15 },
-    cameraLookAt: { x: 0, y: 1.08, z: 2.2 }
+    // Camera moved further back & framed to show 100% full body of CR7 with +20% longer athletic legs
+    cameraOffset: { x: -0.44, y: 1.66, z: 18.75 },
+    cameraLookAt: { x: 0, y: 1.15, z: 2.2 }
   },
   "FREEKICK_WALL": {
     id: "FREEKICK_WALL",
@@ -506,10 +506,16 @@ const CR7Engine = {
   jerseyBackMat: null,
 
   // Animation & Physics State
-  // Detailed phases: "STANCE" (includes A-stance -> Deep Breath/Shoulder Shrug) -> "STEP_CLOSE" -> "RUNUP" -> "KICK" -> "CELEBRATE" -> "RESETTING"
+  // Detailed phases: "STANCE" -> "STEP_CLOSE" (0.5x slow-mo) -> "RUNUP" (0.5x slow-mo) -> "KICK" (1.0x) -> "CELEBRATE_RUN" -> "CELEBRATE_SIU" | "DISAPPOINTED"
   phase: "STANCE",
   phaseTimer: 0,
   homeLoopTimer: 0,
+  preKickTimeScale: 0.5, // CẢI TIẾN 2 & 5: Slow-Mo 0.5x từ lúc nhả Space đến khi chân chạm bóng
+  sutAudioFired: false,  // CẢI TIẾN 1: Đánh dấu đã kích hoạt 3-sut.mp3 trước 0.5s thực tế khi chân chạm bóng
+  camMode: "DEFAULT",    // "DEFAULT" | "FOLLOW_BALL" | "HOLD_AT_GOAL"
+  camHoldTimer: 0,
+  camHoldPos: new THREE.Vector3(0, 1.35, 2.75),
+  camHoldLook: new THREE.Vector3(0, 1.15, -0.6),
   netRippleIntensity: 0,
   netImpactPoint: new THREE.Vector3(),
 
@@ -1311,9 +1317,9 @@ const CR7Engine = {
       metalness: 0.78
     });
 
-    // Root Pelvis / Hip Pivot
+    // Root Pelvis / Hip Pivot (+20% leg length -> pelvis elevated from 0.96m to 1.15m)
     const pelvis = new THREE.Group();
-    pelvis.position.set(0, 0.96, 0);
+    pelvis.position.set(0, 1.15, 0);
     cr7.add(pelvis);
 
     // Upper Torso / Spine Pivot
@@ -1537,107 +1543,179 @@ const CR7Engine = {
     const rightArm = buildHighPolyArm(false);
     spine.add(leftArm.shoulderPivot, rightArm.shoulderPivot);
 
-    // 4. 5X HIGH-POLY LEGS (Flared Red Shorts, Sculpted Knees, Muscular Green Calves, Studded Boots)
+    // 4. CẢI TIẾN 3: ĐÔI CHÂN DÀI HƠN 20%, ĐÙI TO THON DÀI DẦN XUỐNG CỔ CHÂN & GIÀY ĐÁ BÓNG MŨI NHỌN THẬT NGOÀI ĐỜI
     const buildHighPolyLeg = (isLeft) => {
       const hipPivot = new THREE.Group();
-      hipPivot.position.set(isLeft ? -0.14 : 0.14, 0, 0);
+      hipPivot.position.set(isLeft ? -0.145 : 0.145, 0, 0);
 
-      // Flared Red Shorts Thigh (LatheGeometry 64 segments)
+      // 4A. Ống quần đùi đỏ ôm phần gốc đùi to vạm vỡ (LatheGeometry 72 segments, y: 0 -> -0.34)
       const shortPts = [];
-      for (let i = 0; i <= 20; i++) {
-        const t = i / 20;
-        const r = 0.114 + t * 0.016 + Math.sin(t * Math.PI * 2) * 0.004;
+      for (let i = 0; i <= 24; i++) {
+        const t = i / 24;
+        // Phần hông/đùi trên nở to (0.130) và thuôn gọn tự nhiên xuống gấu quần (0.112)
+        const r = 0.130 - t * 0.018 + Math.sin(t * Math.PI) * 0.005;
         shortPts.push(new THREE.Vector2(r, -t * 0.34));
       }
-      const shortLeg = new THREE.Mesh(new THREE.LatheGeometry(shortPts, 64), shortsRedMat);
+      const shortLeg = new THREE.Mesh(new THREE.LatheGeometry(shortPts, 72), shortsRedMat);
+      shortLeg.scale.set(1.04, 1.0, 1.08);
       shortLeg.castShadow = true;
       hipPivot.add(shortLeg);
 
-      // Bare Muscular Lower Quad & Knee Joint (64 segments)
-      const kneeQuad = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.086, 0.074, 0.16, 64, 12),
-        skinMat
-      );
-      kneeQuad.position.y = -0.36;
-      kneeQuad.castShadow = true;
-      hipPivot.add(kneeQuad);
+      // 4B. Đùi cơ bắp (Quadriceps) to ở trên nhưng THON DÀI DẦN mượt mà xuống đầu gối (y: -0.28 -> -0.52)
+      const quadPts = [];
+      for (let i = 0; i <= 28; i++) {
+        const t = i / 28; // 0 (dưới quần đùi) -> 1 (khớp gối)
+        // Cơ đùi trên to khỏe (0.105), nổi nhẹ cơ giọt lệ vastus medialis ở giữa đùi rồi thon gọn dần xuống gối (0.060)
+        const vastusBulge = Math.sin(Math.pow(t, 0.85) * Math.PI) * 0.012;
+        const r = 0.105 * (1 - t * 0.43) + vastusBulge;
+        quadPts.push(new THREE.Vector2(r, -0.28 - t * 0.24));
+      }
+      const quadMesh = new THREE.Mesh(new THREE.LatheGeometry(quadPts, 72), skinMat);
+      quadMesh.scale.set(1.02, 1.0, 1.06);
+      quadMesh.castShadow = true;
+      hipPivot.add(quadMesh);
 
-      const kneeCap = new THREE.Mesh(new THREE.SphereGeometry(0.075, 48, 48), skinMat);
-      kneeCap.position.y = -0.42;
+      // Xương bánh chè (Patella) thon gọn ăn khớp với đầu gối
+      const kneeCap = new THREE.Mesh(new THREE.SphereGeometry(0.059, 48, 48), skinMat);
+      kneeCap.scale.set(0.92, 1.08, 0.90);
+      kneeCap.position.set(0, -0.515, -0.008);
+      kneeCap.castShadow = true;
       hipPivot.add(kneeCap);
 
-      // Knee Pivot
+      // Khớp Gối (Knee Pivot hạ xuống -0.52m để tăng chiều dài đùi +20%)
       const kneePivot = new THREE.Group();
-      kneePivot.position.y = -0.42;
+      kneePivot.position.y = -0.52;
       hipPivot.add(kneePivot);
 
-      // Anatomical Muscular Calf in Deep Forest Green Sock (LatheGeometry 72 segments!)
+      // 4C. Bắp chân (Calf) dài thanh thoát, cơ bắp chuối cao và THON NHỎ DẦN xuống cổ chân (y: 0 -> -0.50)
       const calfPts = [];
-      for (let i = 0; i <= 28; i++) {
-        const t = i / 28; // 0 (below knee) -> 1 (ankle)
-        // Prominent gastrocnemius calf muscle bulge at t ~ 0.35 tapering to athletic ankle
-        const gastroBulge = Math.sin(Math.pow(t, 0.75) * Math.PI) * 0.032;
-        const baseRadius = 0.072 * (1 - t * 0.32) + gastroBulge;
-        calfPts.push(new THREE.Vector2(baseRadius, -t * 0.41));
+      for (let i = 0; i <= 32; i++) {
+        const t = i / 32; // 0 (dưới gối) -> 1 (cổ chân)
+        // Bắp chuối (gastrocnemius) nở ở 1/3 trên (t ~ 0.26) rồi vuốt thon dài xuống gân Achilles & mắt cá (r = 0.036)
+        const gastroBulge = Math.sin(Math.pow(t, 0.65) * Math.PI) * 0.024 * (1 - t * 0.45);
+        const baseRadius = 0.060 * (1 - t * 0.40) + gastroBulge;
+        calfPts.push(new THREE.Vector2(baseRadius, -t * 0.50));
       }
       const calfSock = new THREE.Mesh(new THREE.LatheGeometry(calfPts, 72), sockGreenMat);
+      calfSock.scale.set(0.98, 1.0, 1.05);
       calfSock.castShadow = true;
       kneePivot.add(calfSock);
 
-      // White Ankle Tape / Sock Cuff above Boot (exact detail from reference photo!)
-      const ankleCuff = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.056, 0.054, 0.082, 64),
-        bootWhiteMat
-      );
-      ankleCuff.position.y = -0.43;
+      // Băng quấn cổ chân trắng (Ankle Tape) ôm sát cổ chân thon gọn (y: -0.45 -> -0.54)
+      const tapePts = [];
+      for (let i = 0; i <= 12; i++) {
+        const t = i / 12;
+        const r = 0.041 * (1 - t * 0.12);
+        tapePts.push(new THREE.Vector2(r, -0.45 - t * 0.09));
+      }
+      const ankleCuff = new THREE.Mesh(new THREE.LatheGeometry(tapePts, 64), bootWhiteMat);
       ankleCuff.castShadow = true;
       kneePivot.add(ankleCuff);
 
-      // High-Poly Sculpted White & Gold Studded Football Boot (Nike Mercurial Style)
-      const bootGroup = new THREE.Group();
-      bootGroup.position.set(0, -0.49, -0.045);
-      kneePivot.add(bootGroup);
+      // 4D. Khớp Cổ Chân (Ankle Pivot tại y = -0.54m) giúp khóa cứng cổ chân (Plantar Flexion) khi sút Knuckleball!
+      const anklePivot = new THREE.Group();
+      anklePivot.position.set(0, -0.54, 0);
+      kneePivot.add(anklePivot);
 
-      // Sculpted Upper Boot Shell
-      const bootShell = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.052, 0.058, 0.27, 48),
+      // 4E. ĐÔI GIÀY ĐÁ BÓNG MŨI NHỌN THẬT NGOÀI ĐỜI (Sculpted Pointed Nike Mercurial Vapor/Superfly Last)
+      const bootGroup = new THREE.Group();
+      bootGroup.position.set(0, -0.025, 0);
+      anklePivot.add(bootGroup);
+
+      // Thân giày 3D vuốt nhọn khí động học về phía mũi giày (64x48 vertex-sculpted aerodynamic boot last)
+      const bootUpperGeo = new THREE.SphereGeometry(1.0, 64, 48);
+      const bPos = bootUpperGeo.attributes.position;
+      for (let i = 0; i < bPos.count; i++) {
+        const nx = bPos.getX(i); // -1..1
+        const ny = bPos.getY(i); // -1..1
+        const nz = bPos.getZ(i); // -1 (mũi giày) .. +1 (gót giày)
+
+        // u = 0 tại gót giày (z = +0.085), u = 1 tại mũi giày nhọn (z = -0.225) -> tổng chiều dài giày 0.31m
+        const u = (1 - nz) * 0.5;
+        const z = 0.085 - u * 0.310;
+
+        // Độ rộng ngang (Width): Gót ôm gọn (0.038), nở nhẹ ở mu bàn chân (0.048), sau đó VUỐT NHỌN SẮC NÉT về mũi giày (0.007)
+        let halfW;
+        if (u < 0.55) {
+          halfW = 0.037 + Math.sin((u / 0.55) * Math.PI * 0.65) * 0.012;
+        } else {
+          const tipT = (u - 0.55) / 0.45; // 0 -> 1 về phía mũi nhọn
+          halfW = 0.049 * Math.pow(1 - tipT, 1.15) + 0.006;
+        }
+        // Độ cong bất đối xứng tự nhiên giữa má trong và má ngoài bàn chân
+        const archShiftX = (isLeft ? -1 : 1) * Math.sin(u * Math.PI) * 0.005;
+        const x = nx * halfW + archShiftX;
+
+        // Độ cao (Height): Đế phẳng bên dưới (-0.032), mu giày vồng cao ở cổ chân rồi vuốt thấp nhọn xuống mũi giày
+        let y;
+        const toeSpring = u > 0.72 ? Math.pow((u - 0.72) / 0.28, 1.6) * 0.010 : 0;
+        if (ny < 0) {
+          y = ny * 0.032 + toeSpring;
+        } else {
+          let topH;
+          if (u < 0.28) {
+            topH = 0.046; // Cổ giày ôm mắt cá
+          } else {
+            const vampT = (u - 0.28) / 0.72;
+            topH = 0.046 * Math.pow(1 - vampT, 0.92) + 0.008; // Vuốt mỏng nhọn xuống mũi giày
+          }
+          y = ny * topH + toeSpring;
+        }
+
+        bPos.setXYZ(i, x, y, z);
+      }
+      bootUpperGeo.computeVertexNormals();
+      const bootUpper = new THREE.Mesh(bootUpperGeo, bootWhiteMat);
+      bootUpper.castShadow = true;
+      bootUpper.receiveShadow = true;
+      bootGroup.add(bootUpper);
+
+      // Cổ giày thun Dynamic Fit Collar ôm sát cổ chân
+      const bootCollar = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.038, 0.042, 0.038, 48),
         bootWhiteMat
       );
-      bootShell.rotation.x = Math.PI / 2;
-      bootShell.scale.set(1.02, 1.0, 0.78);
-      bootShell.castShadow = true;
-      bootGroup.add(bootShell);
+      bootCollar.position.set(0, 0.032, 0.015);
+      bootCollar.rotation.x = 0.12;
+      bootGroup.add(bootCollar);
 
-      // Rounded Toe Cap & Heel Counter
-      const toeCap = new THREE.Mesh(new THREE.SphereGeometry(0.054, 36, 36), bootWhiteMat);
-      toeCap.scale.set(1.0, 0.72, 1.15);
-      toeCap.position.set(0, -0.005, -0.13);
-      bootGroup.add(toeCap);
-
-      const heelCup = new THREE.Mesh(new THREE.SphereGeometry(0.055, 36, 36), goldAccentMat);
-      heelCup.scale.set(0.98, 0.85, 0.9);
-      heelCup.position.set(0, 0.005, 0.125);
-      bootGroup.add(heelCup);
-
-      // Metallic Gold Side Speed Stripe
-      const goldStripe = new THREE.Mesh(
-        new THREE.BoxGeometry(0.116, 0.026, 0.19),
+      // Gót giày bọc khung Carbon Vàng Kim Loại (Metallic Gold Heel Counter)
+      const heelCup = new THREE.Mesh(
+        new THREE.SphereGeometry(0.039, 36, 36, 0, Math.PI * 2, 0, Math.PI * 0.65),
         goldAccentMat
       );
-      goldStripe.position.set(0, -0.005, -0.01);
-      bootGroup.add(goldStripe);
+      heelCup.rotation.x = Math.PI / 2;
+      heelCup.scale.set(0.96, 0.85, 0.82);
+      heelCup.position.set(0, -0.002, 0.062);
+      bootGroup.add(heelCup);
 
-      // 8 Individual 3D Football Cleats / Studs under the Boot Soleplate
-      const studMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.3 });
-      [-0.032, 0.032].forEach((sx) => {
-        [-0.10, -0.04, 0.05, 0.10].forEach((sz) => {
-          const stud = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.005, 0.024, 12), studMat);
-          stud.position.set(sx, -0.048, sz);
-          bootGroup.add(stud);
-        });
+      // Đường vạch khí động học Vàng Kim Loại chạy dọc 2 bên má giày vuốt nhọn về phía mũi
+      [-1, 1].forEach((side) => {
+        const stripeGeo = new THREE.ConeGeometry(0.012, 0.19, 16);
+        stripeGeo.rotateX(-Math.PI / 2);
+        const stripe = new THREE.Mesh(stripeGeo, goldAccentMat);
+        stripe.scale.set(0.28, 0.75, 1.0);
+        stripe.position.set(side * 0.039, -0.004, -0.045);
+        stripe.rotation.y = side * -0.11;
+        bootGroup.add(stripe);
       });
 
-      return { hipPivot, kneePivot, bootGroup };
+      // Hệ thống 9 đinh tán mũi tên (Bladed Chevron Cleats) dưới đế giày bóng đá chuyên nghiệp
+      const studMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.25, metalness: 0.5 });
+      const studCoords = [
+        [-0.024, 0.055], [0.024, 0.055],   // 2 đinh gót (Heel studs)
+        [-0.030, -0.045], [0.030, -0.045], // 2 đinh bàn chân sau
+        [-0.032, -0.105], [0.032, -0.105], // 2 đinh bàn chân giữa
+        [-0.022, -0.155], [0.022, -0.155], // 2 đinh mũi thu hẹp theo dáng mũi nhọn
+        [0.0, -0.190]                      // 1 đinh mũi nhọn trung tâm (Toe-off traction blade)
+      ];
+      studCoords.forEach(([sx, sz]) => {
+        const stud = new THREE.Mesh(new THREE.CylinderGeometry(0.0065, 0.0035, 0.022, 12), studMat);
+        stud.position.set(sx, -0.034, sz);
+        bootGroup.add(stud);
+      });
+
+      return { hipPivot, kneePivot, anklePivot, bootGroup };
     };
 
     const leftLeg = buildHighPolyLeg(true);
@@ -1660,18 +1738,22 @@ const CR7Engine = {
   },
 
   /* --------------------------------------------------------------------------
-     CẢI TIẾN 3: CHUYỂN ĐỘNG CR7 CHI TIẾT NHƯ NGOÀI ĐỜI THẬT
-     1. Đứng chữ A dang rộng 2 chân -> Hít hơi sâu căng lồng ngực & nâng cao 2 vai -> Hạ vai thở ra
-     2. Thu khép chân phải lấy nhịp -> Chạy lấy đà 4 bước cong -> Đặt chân trụ sát bóng
-     3. Vung chân khóa cổ chân sút Knuckleball + nhảy đệm trên chân trụ
-     4. Bật nhảy cao xoay 180 độ trên không + vung 2 tay tiếp đất "SIUUU!"
+     CẢI TIẾN 4: MÔ PHỎNG VẬT LÝ & SINH CƠ HỌC (BIOMECHANICS) CÚ SÚT KNUCKLEBALL CỦA CR7
+     1. Tư thế chuẩn bị: Đứng chữ A rộng chân -> Hít sâu nâng 2 vai căng lồng ngực -> Thở ra hạ vai gồng khóa cơ bụng (Core Bracing).
+     2. Bước thu chân & Xoay góc 40 độ (STEP_CLOSE): Hạ trọng tâm, thu chân phải lấy nhịp, xoay hông mở góc chạy đà ~40 độ, mắt khóa chặt vào van bóng.
+     3. Chạy lấy đà + Bước nhảy đệm "Vault Step" + Đặt chân trụ & Kéo chân sút xa ra sau (RUNUP):
+        - 3 bước chạy đà gia tốc góc 40 độ.
+        - Bước áp chót (Penultimate "Vault Step"): Bật nảy trên mũi chân phải phóng trọng tâm lên cao & về trước.
+        - Đặt chân trụ (Plant Foot Slam): Chân trái cắm mạnh sát bên trái quả bóng, gối khuỵu làm trụ nén lò xo, ngực và vai đổ đè lên trên bóng, tay trái vung cao ngang vai làm đối trọng.
+        - Kéo căng chân sút (Extreme Hip-Extension Backswing): Cơ mông & đùi sau kéo đùi phải vươn cực xa ra phía sau lưng (75°), gối phải gập sâu đưa gót giày sát mông, cổ chân phải khóa cứng duỗi thẳng mũi giày nhọn xuống dưới (Rigid Plantar Flexion).
+     4. Quất chân Knuckleball & Nhảy thu chân trụ (KICK): Quất đùi và cẳng chân như roi da đập mu bàn chân khóa cứng xuyên tâm bóng (0 xoáy), lực quán tính nhấc bổng cả chân trụ lên khỏi mặt cỏ (Scissor Hop).
      -------------------------------------------------------------------------- */
   applySignatureStance(timeSec) {
     if (!this.cr7) return;
     const { pelvis, spine, headGroup, leftArm, rightArm, leftLeg, rightLeg } = this.cr7.userData;
 
-    this.cr7.position.set(-0.78, 0, 13.35);
-    this.cr7.rotation.y = -0.18;
+    this.cr7.position.set(-0.88, 0, 13.55);
+    this.cr7.rotation.y = -0.22;
 
     // 3.2-second realistic breathing + shoulder shrug ritual cycle
     const cycle = timeSec % 3.2;
@@ -1687,22 +1769,24 @@ const CR7Engine = {
       chestExpand = Math.sin(timeSec * 2.5) * 0.012;
     }
 
-    pelvis.position.set(0, 0.96, 0);
+    pelvis.position.set(0, 1.135, 0);
     pelvis.rotation.set(0, 0, 0);
 
     spine.rotation.set(0.045 - shrug * 0.03, 0, 0);
     spine.scale.set(1 + chestExpand, 1 + shrug * 0.015, 1 + chestExpand * 1.3);
-    headGroup.rotation.set(-0.05 - shrug * 0.04, 0.14, 0);
+    headGroup.rotation.set(-0.04 - shrug * 0.04, 0.16, 0);
 
     // Elevate shoulders during the deep breath shrug
     leftArm.shoulderPivot.position.y = 0.58 + shrug * 0.036;
     rightArm.shoulderPivot.position.y = 0.58 + shrug * 0.036;
 
-    // WIDE-LEGGED A-STANCE (Chân đứng chữ A thương hiệu)
-    leftLeg.hipPivot.rotation.set(0.03, 0.09, -0.255);
-    rightLeg.hipPivot.rotation.set(0.03, -0.09, 0.255);
-    leftLeg.kneePivot.rotation.set(0.04, 0, 0);
-    rightLeg.kneePivot.rotation.set(0.04, 0, 0);
+    // WIDE-LEGGED A-STANCE (Chân dài +20% đứng chữ A thương hiệu)
+    leftLeg.hipPivot.rotation.set(0.03, 0.08, -0.24);
+    rightLeg.hipPivot.rotation.set(0.03, -0.08, 0.24);
+    leftLeg.kneePivot.rotation.set(0.03, 0, 0);
+    rightLeg.kneePivot.rotation.set(0.03, 0, 0);
+    leftLeg.anklePivot.rotation.set(-0.03, 0, 0);
+    rightLeg.anklePivot.rotation.set(-0.03, 0, 0);
 
     // Tensed straight arms angled out from hips
     leftArm.shoulderPivot.rotation.set(0.05, 0, -0.25 - shrug * 0.05);
@@ -1711,77 +1795,162 @@ const CR7Engine = {
     rightArm.elbowPivot.rotation.set(-0.09, 0, 0);
   },
 
-  updateDetailedCR7Sequence(dt) {
+  updateDetailedCR7Sequence(animDt) {
     const { pelvis, spine, headGroup, leftArm, rightArm, leftLeg, rightLeg } = this.cr7.userData;
 
     if (this.phase === "STEP_CLOSE") {
-      // Phase 1 of Shot (0.50s): CR7 hears whistle (2-coi.mp3), inhales & closes feet together
-      const duration = 0.50;
+      // Giai đoạn 1 (0.46s ở tốc độ Slow-Mo 0.5x = 0.92s thực tế):
+      // Thở ra khóa cơ bụng, hạ thấp trọng tâm, thu chân phải vào lấy nhịp & mở góc chạy đà 40 độ
+      const duration = 0.46;
       const p = Math.min(1, this.phaseTimer / duration);
       const ease = p * p * (3 - 2 * p);
 
-      // Bring right leg inward from wide A-stance (0.255 -> 0.05) and drop center of gravity slightly
-      const stanceSpread = 0.255 * (1 - ease * 0.82);
-      leftLeg.hipPivot.rotation.set(0.05 + ease * 0.12, 0.05, -stanceSpread);
-      rightLeg.hipPivot.rotation.set(-0.08 * ease, -0.05, stanceSpread);
-      leftLeg.kneePivot.rotation.x = 0.04 + ease * 0.18;
-      rightLeg.kneePivot.rotation.x = 0.04 + ease * 0.22;
+      this.cr7.rotation.y = -0.22 - ease * 0.14; // Xoay góc lấy đà ~38-40 độ đặc trưng của CR7
+      const stanceSpread = 0.24 * (1 - ease * 0.85);
 
-      pelvis.position.y = 0.96 - ease * 0.05;
-      spine.rotation.x = 0.05 + ease * 0.16;
+      leftLeg.hipPivot.rotation.set(0.08 + ease * 0.16, 0.05, -stanceSpread);
+      rightLeg.hipPivot.rotation.set(-0.18 * ease, -0.05, stanceSpread);
+      leftLeg.kneePivot.rotation.x = 0.04 + ease * 0.24;
+      rightLeg.kneePivot.rotation.x = 0.04 + ease * 0.34;
+      leftLeg.anklePivot.rotation.x = -0.08 * ease;
+      rightLeg.anklePivot.rotation.x = 0.18 * ease; // Nhón nhẹ mũi chân phải chuẩn bị bứt tốc
 
-      // Raise arms into athletic sprint-ready posture
+      pelvis.position.y = 1.135 - ease * 0.065;
+      pelvis.rotation.y = -0.12 * ease;
+      spine.rotation.set(0.05 + ease * 0.20, 0.08 * ease, 0);
+      headGroup.rotation.set(0.18 * ease, 0.18, 0); // Mắt khóa chặt vào tâm quả bóng
+
       leftArm.shoulderPivot.position.y = 0.58;
       rightArm.shoulderPivot.position.y = 0.58;
-      leftArm.shoulderPivot.rotation.set(0.25 * ease, 0, -0.18);
-      rightArm.shoulderPivot.rotation.set(-0.25 * ease, 0, 0.18);
-      leftArm.elbowPivot.rotation.x = -0.65 * ease;
-      rightArm.elbowPivot.rotation.x = -0.65 * ease;
+      leftArm.shoulderPivot.rotation.set(0.32 * ease, 0, -0.20);
+      rightArm.shoulderPivot.rotation.set(-0.32 * ease, 0, 0.20);
+      leftArm.elbowPivot.rotation.x = -0.78 * ease;
+      rightArm.elbowPivot.rotation.x = -0.78 * ease;
 
       if (p >= 1) {
         this.phase = "RUNUP";
         this.phaseTimer = 0;
       }
     } else if (this.phase === "RUNUP") {
-      // Phase 2 (1.00s): 3-sut.mp3 plays at start of this 1.00s run-up, so foot touches ball at exact 1.00s mark!
-      const duration = 1.00;
+      // Giai đoạn 2 (1.04s ở tốc độ Slow-Mo 0.5x = 2.08s thực tế):
+      // Chuỗi chạy lấy đà 3 bước + Bước nhảy đệm "Vault Step" + Cắm chân trụ sát bóng + Kéo căng chân sút tối đa ra sau lưng
+      const duration = 1.04;
       const p = Math.min(1, this.phaseTimer / duration);
       const ease = p * p * (3 - 2 * p);
 
-      // Curved approach path from (-0.78, 13.35) to (-0.25, 11.08)
-      const curveArc = Math.sin(p * Math.PI) * -0.18;
-      this.cr7.position.x = -0.78 + ease * 0.53 + curveArc;
-      this.cr7.position.z = 13.35 - ease * 2.27;
-      this.cr7.rotation.y = -0.18 * (1 - ease);
+      // CẢI TIẾN 1: Kích hoạt 3-sut.mp3 chính xác TRƯỚC 0.5 GIÂY THỰC TẾ so với thời điểm chân chạm bóng!
+      // Vì RUNUP đang chạy ở Slow-Mo (preKickTimeScale = 0.5), thời gian thực còn lại tới lúc chạm bóng (p=1) là:
+      const remainingRealSec = (duration - this.phaseTimer) / this.preKickTimeScale;
+      if (!this.sutAudioFired && remainingRealSec <= 0.50) {
+        this.sutAudioFired = true;
+        StadiumAudio.playBallStrike();
+      }
 
-      const stride = Math.sin(p * Math.PI * 4);
-      pelvis.position.y = 0.92 + Math.abs(stride) * 0.055;
-      spine.rotation.x = 0.24;
-      spine.scale.set(1, 1, 1);
+      // Quỹ đạo chạy đà góc ~38 độ từ (-0.88, 13.55) lao về đặt chân trụ trái sát bên trái quả bóng (-0.26, 11.02)
+      const curveArc = Math.sin(p * Math.PI) * -0.22;
+      this.cr7.position.x = -0.88 + ease * 0.62 + curveArc;
+      this.cr7.position.z = 13.55 - ease * 2.53;
+      this.cr7.rotation.y = -0.36 * (1 - Math.pow(p, 1.5));
 
-      leftLeg.hipPivot.rotation.set(stride * 0.72, 0, -0.05);
-      rightLeg.hipPivot.rotation.set(-stride * 0.72, 0, 0.05);
-      leftLeg.kneePivot.rotation.x = Math.max(0.05, -stride * 0.85);
-      rightLeg.kneePivot.rotation.x = Math.max(0.05, stride * 0.85);
+      if (p < 0.54) {
+        // PHẦN 2A (0.00 -> 0.54): 3 bước chạy lấy đà gia tốc mạnh mẽ
+        const runP = p / 0.54;
+        const stride = Math.sin(runP * Math.PI * 3.0);
 
-      leftArm.shoulderPivot.rotation.set(-stride * 0.62, 0, -0.22);
-      rightArm.shoulderPivot.rotation.set(stride * 0.62, 0, 0.22);
-      leftArm.elbowPivot.rotation.x = -0.75;
-      rightArm.elbowPivot.rotation.x = -0.75;
+        pelvis.position.y = 1.07 + Math.abs(stride) * 0.065;
+        pelvis.rotation.y = -stride * 0.18;
+        spine.rotation.set(0.26, stride * 0.16, 0);
+        headGroup.rotation.set(0.22, 0.10 * (1 - runP), 0);
 
-      // Final plant step & deep right-leg backswing cocking for Knuckleball
-      if (p > 0.72) {
-        const wind = (p - 0.72) / 0.28;
-        // Left plant leg lunges forward beside ball
-        leftLeg.hipPivot.rotation.set(-0.42 * wind, 0, -0.12);
-        leftLeg.kneePivot.rotation.x = 0.28 * wind;
-        // Right striking leg cocks high behind hip
-        rightLeg.hipPivot.rotation.set(0.95 * wind, 0, 0.08);
-        rightLeg.kneePivot.rotation.x = 1.18 * wind;
-        // Left arm swings high & wide for counter-balance (classic CR7 free-kick silhouette)
-        leftArm.shoulderPivot.rotation.set(-0.55 * wind, 0, -0.88 * wind);
-        leftArm.elbowPivot.rotation.x = -0.25 * wind;
-        spine.rotation.z = 0.14 * wind;
+        leftLeg.hipPivot.rotation.set(stride * 0.85, 0, -0.05);
+        rightLeg.hipPivot.rotation.set(-stride * 0.85, 0, 0.05);
+        leftLeg.kneePivot.rotation.x = Math.max(0.08, -stride * 1.05);
+        rightLeg.kneePivot.rotation.x = Math.max(0.08, stride * 1.05);
+        leftLeg.anklePivot.rotation.x = stride * 0.25;
+        rightLeg.anklePivot.rotation.x = -stride * 0.25;
+
+        leftArm.shoulderPivot.rotation.set(-stride * 0.72, 0, -0.24);
+        rightArm.shoulderPivot.rotation.set(stride * 0.72, 0, 0.24);
+        leftArm.elbowPivot.rotation.x = -0.85;
+        rightArm.elbowPivot.rotation.x = -0.85;
+      } else if (p < 0.74) {
+        // PHẦN 2B (0.54 -> 0.74): BƯỚC NHẢY ĐỆM ÁP CHÓT ("THE VAULT STEP")
+        // Chân phải đạp bật trên mũi giày nhọn, phóng trọng tâm lên cao, chân trái vươn dài ra trước chuẩn bị cắm trụ, tay trái mở rộng lên cao!
+        const vaultP = (p - 0.54) / 0.20;
+        const vaultArc = Math.sin(vaultP * Math.PI);
+
+        pelvis.position.y = 1.08 + vaultArc * 0.095; // Bật vọt trọng tâm lên không trung trước khi cắm trụ
+        pelvis.rotation.y = -0.15 - vaultP * 0.18;   // Xoay mở hông phải ra sau để nạp lực
+        spine.rotation.set(0.26 + vaultP * 0.06, 0.18 * vaultP, 0.08 * vaultP);
+        headGroup.rotation.set(0.28, 0, 0); // Mắt nhìn thẳng xuống tâm bóng
+
+        // Chân trụ trái vươn dài về phía trước hướng thẳng tới vị trí sát bên trái quả bóng
+        leftLeg.hipPivot.rotation.set(-0.62 * vaultP, 0, -0.10);
+        leftLeg.kneePivot.rotation.x = 0.45 * (1 - vaultP * 0.65); // Duỗi dần chân trái ra trước để bước dài cắm trụ
+        leftLeg.anklePivot.rotation.x = -0.22 * vaultP; // Mũi giày trái dựng nhẹ để gót giày cắm xuống đất trước
+
+        // Chân phải vừa đạp đất bật lên và bắt đầu kéo ngược ra phía sau
+        rightLeg.hipPivot.rotation.set(0.35 + vaultP * 0.60, 0, 0.08);
+        rightLeg.kneePivot.rotation.x = 0.25 + vaultP * 0.85;
+        rightLeg.anklePivot.rotation.x = 0.35 * vaultP;
+
+        // Cánh tay trái bắt đầu vung cao và mở rộng sang ngang để giữ thăng bằng quán tính
+        leftArm.shoulderPivot.rotation.set(-0.35 * vaultP, 0, -0.30 - vaultP * 0.72);
+        leftArm.elbowPivot.rotation.x = -0.75 + vaultP * 0.50;
+        rightArm.shoulderPivot.rotation.set(0.38 * vaultP, 0, 0.28 + vaultP * 0.22);
+        rightArm.elbowPivot.rotation.x = -0.65;
+      } else if (p < 0.91) {
+        // PHẦN 2C (0.74 -> 0.91): CẮM CHÂN TRỤ SÁT BÓNG & KÉO CHÂN SÚT CỰC XA RA PHÍA SAU LƯNG (MAX HIP EXTENSION)
+        const coilP = (p - 0.74) / 0.17;
+        const coilEase = Math.sin(coilP * Math.PI * 0.5);
+
+        // Hạ trọng tâm nén lực lên đầu gối chân trụ trái
+        pelvis.position.y = 1.08 - coilEase * 0.045;
+        pelvis.rotation.y = -0.33 - coilEase * 0.08;
+        // Ngực và vai đổ nghiêng đè sát lên trên quả bóng (Trunk Lean Over Ball + Lateral Tilt)
+        spine.rotation.set(0.32 + coilEase * 0.05, 0.24 * coilEase, 0.22 * coilEase);
+        headGroup.rotation.set(0.32, 0, -0.08 * coilEase);
+
+        // Chân trụ trái cắm chặt xuống mặt cỏ ngay sát quả bóng, gối khuỵu vững chãi chịu lực
+        leftLeg.hipPivot.rotation.set(-0.58 + coilEase * 0.06, 0, -0.14);
+        leftLeg.kneePivot.rotation.x = 0.16 + coilEase * 0.24;
+        leftLeg.anklePivot.rotation.x = -0.16;
+
+        // CHÂN SÚT PHẢI KÉO CĂNG TỐI ĐA RA PHÍA SAU LƯNG (1.32 rad ~ 76 độ) & GẬP SÂU GỐI (1.54 rad ~ 88 độ)
+        rightLeg.hipPivot.rotation.set(0.95 + coilEase * 0.37, -0.08 * coilEase, 0.10);
+        rightLeg.kneePivot.rotation.x = 1.10 + coilEase * 0.44;
+        // Khóa cứng cổ chân phải duỗi thẳng mũi giày nhọn (Rigid Ankle Plantar Flexion)
+        rightLeg.anklePivot.rotation.x = 0.35 + coilEase * 0.32;
+
+        // Tay trái vung cao ngang vai mở rộng hết cỡ (Classic CR7 Free-Kick Counter-Balance Silhouette)
+        leftArm.shoulderPivot.rotation.set(-0.48, -0.15, -1.02 - coilEase * 0.20);
+        leftArm.elbowPivot.rotation.x = -0.22;
+        rightArm.shoulderPivot.rotation.set(0.45, 0, 0.52);
+        rightArm.elbowPivot.rotation.x = -0.50;
+      } else {
+        // PHẦN 2D (0.91 -> 1.00): QUẤT ĐÙI & BUNG CẲNG CHÂN NHƯ ROI DA (PROXIMAL-TO-DISTAL WHIP) TỚI ĐIỂM CHẠM BÓNG!
+        const snapP = (p - 0.91) / 0.09;
+        const snapEase = snapP * snapP;
+
+        // Hông phải xoay gập cực nhanh về phía trước truyền động lượng xuống đùi và mu bàn chân
+        pelvis.position.y = 1.035 + snapEase * 0.065;
+        pelvis.rotation.y = -0.41 + snapEase * 0.52;
+        spine.rotation.set(0.37 - snapEase * 0.08, 0.24 * (1 - snapEase), 0.22 - snapEase * 0.06);
+        headGroup.rotation.set(0.32, 0, 0);
+
+        // Chân trụ trái đạp thẳng dần nâng hông lên
+        leftLeg.hipPivot.rotation.set(-0.52 + snapEase * 0.38, 0, -0.14);
+        leftLeg.kneePivot.rotation.x = 0.40 - snapEase * 0.22;
+        leftLeg.anklePivot.rotation.x = -0.16 + snapEase * 0.28;
+
+        // Chân phải quất từ phía sau (1.32) lao vút xuống chạm thẳng vào tâm quả bóng (0.08) tại p = 1.0!
+        rightLeg.hipPivot.rotation.set(1.32 - snapEase * 1.24, 0, 0.10 - snapEase * 0.06);
+        rightLeg.kneePivot.rotation.x = 1.54 * (1 - snapEase * 0.88);
+        // Cổ chân phải KHÓA CỨNG (0.65 rad) để xương mu bàn chân đập thẳng vào tâm bóng không tạo xoáy!
+        rightLeg.anklePivot.rotation.x = 0.65;
+
+        leftArm.shoulderPivot.rotation.set(-0.48 + snapEase * 0.30, 0, -1.22 + snapEase * 0.25);
+        rightArm.shoulderPivot.rotation.set(0.45 - snapEase * 0.35, 0, 0.52);
       }
 
       if (p >= 1) {
@@ -1790,38 +1959,40 @@ const CR7Engine = {
         this.launchBallPhysics();
       }
     } else if (this.phase === "KICK") {
-      // Phase 3: Explosive Knuckleball Strike (Locked ankle whip + CR7 hop on plant foot)
+      // Giai đoạn 3 (Tốc độ thực 1.0x): Chân sút khóa cổ chân xuyên qua tâm bóng + Bật nhảy thu chân trụ (Scissor Hop)
       const p = Math.min(1, this.phaseTimer / 0.42);
       const whip = Math.sin(p * Math.PI * 0.5);
-      const hop = Math.sin(p * Math.PI) * 0.09; // Signature hop off the turf due to sheer shot power
+      const hop = Math.sin(p * Math.PI) * 0.11; // Bật nhảy cả người lên khỏi mặt cỏ do lực sút cực đại
 
-      pelvis.position.y = 0.93 + hop;
-      spine.rotation.x = 0.24 - whip * 0.36;
-      spine.rotation.z = 0.14 - whip * 0.28;
-      pelvis.rotation.y = whip * 0.28;
+      pelvis.position.y = 1.10 + hop;
+      spine.rotation.x = 0.29 - whip * 0.32;
+      spine.rotation.z = 0.16 - whip * 0.24;
+      pelvis.rotation.y = 0.11 + whip * 0.22;
 
-      leftLeg.hipPivot.rotation.set(-0.42 + whip * 0.52, 0, -0.12);
-      leftLeg.kneePivot.rotation.x = 0.28 - whip * 0.16;
+      leftLeg.hipPivot.rotation.set(-0.14 + whip * 0.42, 0, -0.12);
+      leftLeg.kneePivot.rotation.x = 0.18 + hop * 1.2;
+      leftLeg.anklePivot.rotation.x = 0.25 * whip;
 
-      // Right leg whips violently forward with locked knee/ankle, then recoils slightly (Knuckleball technique)
-      rightLeg.hipPivot.rotation.set(0.95 - whip * 1.82, 0, 0.08 - whip * 0.16);
-      rightLeg.kneePivot.rotation.x = 1.18 * (1 - whip);
+      // Follow-through thấp, gọn và dừng đột ngột (Abrupt Compact Follow-Through đặc trưng của Knuckleball)
+      rightLeg.hipPivot.rotation.set(0.08 - whip * 0.86, 0, 0.04 - whip * 0.14);
+      rightLeg.kneePivot.rotation.x = 0.18 * (1 - whip * 0.5);
+      rightLeg.anklePivot.rotation.x = 0.65 - whip * 0.25;
 
-      leftArm.shoulderPivot.rotation.set(-0.55 + whip * 0.85, 0, -0.88 + whip * 0.35);
-      rightArm.shoulderPivot.rotation.set(0.35 - whip * 0.65, 0, 0.52);
+      leftArm.shoulderPivot.rotation.set(-0.18 + whip * 0.55, 0, -0.97 + whip * 0.48);
+      rightArm.shoulderPivot.rotation.set(0.10 - whip * 0.45, 0, 0.48);
     } else if (this.phase === "CELEBRATE_RUN") {
-      // CẢI TIẾN 3A: Chạy dang tay ăn mừng quanh sân trong đúng 3.0 giây sau khi ghi bàn
-      // Trong suốt 3 giây này, 4-vao.mp3 và 4-cheer.mp3 đang phát song song
-      const runDur = 3.0;
+      // CẢI TIẾN 3A: Chạy dang tay ăn mừng quanh sân (sau khi camera dừng 1s ở khung thành vẫn còn trọn vẹn 3s chạy dang tay!)
+      // Tổng thời gian CELEBRATE_RUN = 1.0s (trong lúc camera dừng ở khung thành) + 3.0s (chạy dang tay trên màn hình chính) = 4.0s
+      const runDur = 4.0;
       const p = Math.min(1, this.phaseTimer / runDur);
 
-      // Quỹ đạo chạy vòng cung quanh sân từ (-0.25, 11.08) lượn rộng sang phải (+2.35m), vòng lên gần khung thành rồi lượn về giữa sân
+      // Quỹ đạo chạy vòng cung quanh sân từ (-0.26, 11.02) lượn rộng sang phải (+2.45m), vòng lên rồi lượn về giữa sân
       const angle = p * Math.PI * 1.65;
-      const prevAngle = Math.max(0, (this.phaseTimer - dt) / runDur) * Math.PI * 1.65;
-      const curX = -0.25 + Math.sin(angle) * 2.35;
-      const curZ = 11.08 - Math.sin(p * Math.PI) * 2.65;
-      const prevX = -0.25 + Math.sin(prevAngle) * 2.35;
-      const prevZ = 11.08 - Math.sin(Math.max(0, (this.phaseTimer - dt) / runDur) * Math.PI) * 2.65;
+      const prevAngle = Math.max(0, (this.phaseTimer - animDt) / runDur) * Math.PI * 1.65;
+      const curX = -0.26 + Math.sin(angle) * 2.45;
+      const curZ = 11.02 - Math.sin(p * Math.PI) * 2.75;
+      const prevX = -0.26 + Math.sin(prevAngle) * 2.45;
+      const prevZ = 11.02 - Math.sin(Math.max(0, (this.phaseTimer - animDt) / runDur) * Math.PI) * 2.75;
 
       this.cr7.position.x = curX;
       this.cr7.position.z = curZ;
@@ -1832,26 +2003,25 @@ const CR7Engine = {
         this.cr7.rotation.y = Math.atan2(-dx, -dz);
       }
 
-      // Nhịp bước chân chạy nước rút sôi động
+      // Nhịp bước chân chạy nước rút sôi động với đôi chân dài +20%
       const stride = Math.sin(this.phaseTimer * Math.PI * 8.0);
-      pelvis.position.y = 0.94 + Math.abs(stride) * 0.075;
+      pelvis.position.y = 1.12 + Math.abs(stride) * 0.085;
       pelvis.rotation.y = stride * 0.08;
 
-      // Thân người nghiêng lượn theo khúc cua (banking) + ưỡn ngực tự hào
       const bankAngle = Math.cos(angle) * -0.16;
       spine.rotation.set(0.14, 0, bankAngle);
       spine.scale.set(1.03, 1.0, 1.03);
 
-      // Đầu ngẩng cao nhìn quanh khán đài ăn mừng
       headGroup.rotation.set(-0.14, Math.sin(p * Math.PI * 3.0) * 0.36, 0);
 
-      // Hai chân sải bước chạy dài năng động
       leftLeg.hipPivot.rotation.set(stride * 0.82, 0, -0.06);
       rightLeg.hipPivot.rotation.set(-stride * 0.82, 0, 0.06);
       leftLeg.kneePivot.rotation.x = Math.max(0.06, -stride * 0.95);
       rightLeg.kneePivot.rotation.x = Math.max(0.06, stride * 0.95);
+      leftLeg.anklePivot.rotation.x = stride * 0.22;
+      rightLeg.anklePivot.rotation.x = -stride * 0.22;
 
-      // HAI TAY DANG RỘNG NGANG VAI NHƯ CÁNH CHIM (Chạy dang tay ăn mừng đặc trưng)
+      // HAI TAY DANG RỘNG NGANG VAI NHƯ CÁNH CHIM
       const wingWave = Math.sin(this.phaseTimer * Math.PI * 4.0) * 0.08;
       leftArm.shoulderPivot.position.y = 0.59;
       rightArm.shoulderPivot.position.y = 0.59;
@@ -1861,8 +2031,7 @@ const CR7Engine = {
       rightArm.elbowPivot.rotation.x = -0.14;
 
       if (p >= 1) {
-        // Đủ 3 giây chạy dang tay -> Chuyển ngay sang animation ăn mừng SIUUUUU
-        // Đồng thời kết thúc ngay 4-vao.mp3 + 4-cheer.mp3 và kích hoạt ngay 5-siu.mp3!
+        // Kết thúc chạy dang tay -> Chuyển ngay sang animation ăn mừng SIUUUUU & phát 5-siu.mp3
         this.phase = "CELEBRATE_SIU";
         this.phaseTimer = 0;
         StadiumAudio.playSiuCelebration();
@@ -1874,50 +2043,51 @@ const CR7Engine = {
       const startX = this.cr7.position.x;
 
       if (p < 0.16) {
-        // 1. Nhịp dậm nhảy lấy đà cực mạnh
         const prepP = p / 0.16;
-        pelvis.position.y = 0.94 - Math.sin(prepP * Math.PI) * 0.10;
+        pelvis.position.y = 1.12 - Math.sin(prepP * Math.PI) * 0.11;
         spine.rotation.set(0.18 * (1 - prepP), 0, 0);
         leftLeg.hipPivot.rotation.set(-0.22 * prepP, 0, -0.12);
         rightLeg.hipPivot.rotation.set(0.22 * prepP, 0, 0.12);
         leftLeg.kneePivot.rotation.x = 0.35 * prepP;
         rightLeg.kneePivot.rotation.x = 0.35 * prepP;
+        leftLeg.anklePivot.rotation.x = -0.15 * prepP;
+        rightLeg.anklePivot.rotation.x = -0.15 * prepP;
         leftArm.shoulderPivot.rotation.set(0.35 * prepP, 0, -0.45);
         rightArm.shoulderPivot.rotation.set(0.35 * prepP, 0, 0.45);
       } else if (p < 0.54) {
-        // 2. Bật nhảy vút lên không trung + Xoay người 180 độ trên không + Thu 2 tay trước ngực
         const airP = (p - 0.16) / 0.38;
         const arc = Math.sin(airP * Math.PI);
-        pelvis.position.y = 0.96 + arc * 0.88;
+        pelvis.position.y = 1.14 + arc * 0.92;
         this.cr7.position.x = THREE.MathUtils.lerp(startX, 0.25, 0.08);
-        this.cr7.rotation.y = airP * Math.PI; // Xoay 180 độ trên không trung!
+        this.cr7.rotation.y = airP * Math.PI;
 
-        // Co nhẹ 2 gối trên không
         leftLeg.hipPivot.rotation.set(-0.35 * arc, 0, -0.18 - airP * 0.1);
         rightLeg.hipPivot.rotation.set(-0.35 * arc, 0, 0.18 + airP * 0.1);
         leftLeg.kneePivot.rotation.x = 0.55 * arc;
         rightLeg.kneePivot.rotation.x = 0.55 * arc;
+        leftLeg.anklePivot.rotation.x = 0.32 * arc;
+        rightLeg.anklePivot.rotation.x = 0.32 * arc;
 
-        // Thu 2 tay chéo lên trước ngực chuẩn bị vung xuống
         leftArm.shoulderPivot.rotation.set(-1.25 * arc, 0.4 * arc, -0.35);
         rightArm.shoulderPivot.rotation.set(-1.25 * arc, -0.4 * arc, 0.35);
         leftArm.elbowPivot.rotation.x = -0.95 * arc;
         rightArm.elbowPivot.rotation.x = -0.95 * arc;
       } else {
-        // 3. Tiếp đất vững chãi dáng chữ A + Vung chém mạnh 2 tay xuống sau hông hét vang "SIUUUUU!"
         const landP = Math.min(1, (p - 0.54) / 0.22);
         this.cr7.rotation.y = Math.PI;
-        const kneeAbsorb = Math.sin(landP * Math.PI) * 0.12;
-        pelvis.position.y = 0.93 - kneeAbsorb * 0.4;
+        const kneeAbsorb = Math.sin(landP * Math.PI) * 0.14;
+        pelvis.position.y = 1.12 - kneeAbsorb * 0.4;
         pelvis.rotation.y = 0;
 
         spine.rotation.set(-0.14 * landP, 0, 0);
         headGroup.rotation.set(-0.22 * landP, 0, 0);
 
-        leftLeg.hipPivot.rotation.set(-0.08, 0, -0.30);
-        rightLeg.hipPivot.rotation.set(-0.08, 0, 0.30);
+        leftLeg.hipPivot.rotation.set(-0.08, 0, -0.28);
+        rightLeg.hipPivot.rotation.set(-0.08, 0, 0.28);
         leftLeg.kneePivot.rotation.x = kneeAbsorb;
         rightLeg.kneePivot.rotation.x = kneeAbsorb;
+        leftLeg.anklePivot.rotation.x = 0;
+        rightLeg.anklePivot.rotation.x = 0;
 
         leftArm.shoulderPivot.rotation.set(0.28 * landP, 0, -0.48 * landP);
         rightArm.shoulderPivot.rotation.set(0.28 * landP, 0, 0.48 * landP);
@@ -1929,26 +2099,23 @@ const CR7Engine = {
         this.resetToStance();
       }
     } else if (this.phase === "DISAPPOINTED") {
-      // CẢI TIẾN 3C: Đứng lắc đầu thất vọng trong đúng 2.0 giây nếu không ghi bàn (kèm 4-nogoal.mp3)
-      const disDur = 2.0;
+      // Đứng lắc đầu thất vọng (1.0s camera dừng ở khung thành + 2.0s đứng lắc đầu thất vọng trên camera chính = 3.0s)
+      const disDur = 3.0;
       const p = Math.min(1, this.phaseTimer / disDur);
       const easeIn = Math.min(1, this.phaseTimer / 0.25);
 
-      this.cr7.position.x = -0.25;
-      this.cr7.position.z = 11.08;
+      this.cr7.position.x = -0.26;
+      this.cr7.position.z = 11.02;
       this.cr7.rotation.y = -0.12 * easeIn;
 
-      // Hạ thấp vai thở dài thất vọng, chống tay lên hông
-      pelvis.position.y = 0.94;
+      pelvis.position.y = 1.125;
       pelvis.rotation.set(0, 0, 0);
       spine.rotation.set(0.22 * easeIn, 0, -0.04 * easeIn);
       spine.scale.set(1, 0.98, 1);
 
-      // Cúi đầu xuống và LẮC ĐẦU QUA LẠI THẤT VỌNG liên tục trong 2 giây
       const headShake = Math.sin(this.phaseTimer * Math.PI * 5.5) * 0.42 * (1 - p * 0.2);
       headGroup.rotation.set(0.32 * easeIn, headShake, Math.sin(this.phaseTimer * Math.PI * 5.5) * 0.06);
 
-      // Hai tay chống hông tiếc nuối
       leftArm.shoulderPivot.position.y = 0.555;
       rightArm.shoulderPivot.position.y = 0.555;
       leftArm.shoulderPivot.rotation.set(0.18 * easeIn, 0, -0.42 * easeIn);
@@ -1956,11 +2123,12 @@ const CR7Engine = {
       leftArm.elbowPivot.rotation.x = -0.92 * easeIn;
       rightArm.elbowPivot.rotation.x = -0.92 * easeIn;
 
-      // Chân đứng chùng gối tiếc nuối
       leftLeg.hipPivot.rotation.set(0.04, 0, -0.14);
       rightLeg.hipPivot.rotation.set(-0.06, 0, 0.16);
-      leftLeg.kneePivot.rotation.x = 0.05;
+      leftLeg.kneePivot.rotation.x = 0.04;
       rightLeg.kneePivot.rotation.x = 0.18 * easeIn;
+      leftLeg.anklePivot.rotation.x = 0;
+      rightLeg.anklePivot.rotation.x = 0;
 
       if (p >= 1) {
         this.resetToStance();
@@ -1983,14 +2151,12 @@ const CR7Engine = {
     const metrics = evaluateShotPowerMetrics(power);
     const isSweetSpot = isHome ? true : metrics.isSweetSpot;
 
-    // Update store power & P-A-S rating so UI displays the locked-in shot metrics
     if (!isHome) {
       AppStore.dispatchAction({ type: "SET_POWER", payload: power });
     }
 
-    // Calculate speed (km/h) & flight duration
     const speedKmh = isSweetSpot ? 128 : Math.round(88 + (power / 100) * 42);
-    const duration = isSweetSpot ? 0.50 : Math.max(0.46, 0.76 - (power / 100) * 0.25);
+    const duration = isSweetSpot ? 0.55 : Math.max(0.50, 0.78 - (power / 100) * 0.24);
 
     let spinX = customCurve !== null ? customCurve : 0;
     if (customCurve === null) {
@@ -2009,19 +2175,15 @@ const CR7Engine = {
     let outcomeType = "GOAL";
 
     if (isHome || isSweetSpot) {
-      // CẢI TIẾN 6: Khi thả đúng vạch đỏ 80% (isSweetSpot = true) -> P tốt nhất, A cao nhất -> Xác suất ghi bàn S = 100%!
-      // Kẹp toạ độ bóng gọn trong lòng khung thành nếu người chơi lỡ đặt hồng tâm sát mép cột dọc
       targetX = Math.max(-3.38, Math.min(3.38, targetX));
       targetY = Math.max(0.32, Math.min(2.26, targetY));
-      // Thủ môn bị đánh lừa hoặc bay không kịp trước cú sút S=100%
       keeperDiveX = -Math.sign(targetX || 1) * (1.5 + Math.random() * 0.8);
       keeperDiveY = 1.15;
       outcomeType = "GOAL";
     } else {
-      // Apply accuracy scatter when NOT hitting the 80% sweet spot
       targetX += (Math.random() - 0.5) * metrics.scatter * 1.6;
       if (power > 90) {
-        targetY += ((power - 88) / 12) * 0.72; // Overpower risks skying over the crossbar
+        targetY += ((power - 88) / 12) * 0.72;
       } else {
         targetY += (Math.random() - 0.5) * metrics.scatter;
       }
@@ -2037,7 +2199,6 @@ const CR7Engine = {
       } else if (!inWidth || !inHeight) {
         outcomeType = "WIDE";
       } else {
-        // Roll against Goal Probability S%
         const goalRoll = Math.random() * 100;
         if (goalRoll <= metrics.sPercent) {
           outcomeType = "GOAL";
@@ -2067,10 +2228,15 @@ const CR7Engine = {
       outcomeType
     };
 
-    // Kích hoạt 2-coi.mp3 ngay lập tức khi kết thúc giữ Space (phát 1.5s)
+    // Đặt lại cờ âm thanh 3-sut.mp3 (sẽ tự động kích hoạt chính xác trước 0.5s thực tế khi chân chạm bóng)
+    this.sutAudioFired = false;
+    this.camMode = "DEFAULT";
+    this.camHoldTimer = 0;
+
+    // Kích hoạt 2-coi.mp3 ngay lập tức khi kết thúc giữ Space (phát 1.5s, không bị delay bởi slow-mo)
     StadiumAudio.playWhistleOnShotStart();
 
-    // Start with STEP_CLOSE (0.50s) -> RUNUP (1.00s) -> KICK!
+    // Bắt đầu chuỗi động tác sút ở tốc độ Slow-Mo 0.5x: STEP_CLOSE -> RUNUP -> KICK!
     this.phase = "STEP_CLOSE";
     this.phaseTimer = 0;
   },
@@ -2078,8 +2244,14 @@ const CR7Engine = {
   launchBallPhysics() {
     this.shotData.active = true;
     this.shotData.elapsed = 0;
-    // CẢI TIẾN 1: Kích hoạt 3-sut.mp3 NGAY THỜI ĐIỂM chân cầu thủ chạm vào quả bóng!
-    StadiumAudio.playBallStrike();
+    // Phòng trường hợp chưa kịp kích hoạt 3-sut.mp3
+    if (!this.sutAudioFired) {
+      this.sutAudioFired = true;
+      StadiumAudio.playBallStrike();
+    }
+    // CẢI TIẾN 5: Ngay từ thời điểm chân cầu thủ chạm quả bóng, góc camera chuyển sang cận cảnh bám theo quả bóng!
+    this.camMode = "FOLLOW_BALL";
+    this.camHoldTimer = 0;
   },
 
   updateBallAndKeeper(dt) {
@@ -2111,12 +2283,19 @@ const CR7Engine = {
 
     this.ball.position.set(bx, Math.max(0.22, by), bz);
     if (AppStore.state.shotStyle === "knuckle") {
-      // Knuckleball has minimal top-spin so valve/panels wobble visibly in the air!
       this.ball.rotation.x -= dt * 3.5;
       this.ball.rotation.z += Math.sin(p * 18) * dt * 6;
     } else {
       this.ball.rotation.x -= dt * 24;
       this.ball.rotation.y += dt * 16 * spinX;
+    }
+
+    // CẢI TIẾN 5: Khi quả bóng bay tới sát trước khung thành (bz <= 0.65), camera dừng lại trước sát khung thành và đứng yên 1.0s!
+    if (this.camMode === "FOLLOW_BALL" && bz <= 0.65) {
+      this.camMode = "HOLD_AT_GOAL";
+      this.camHoldTimer = 0;
+      this.camHoldPos.set(bx * 0.72, Math.max(0.95, by + 0.32), 2.85);
+      this.camHoldLook.set(targetPos.x * 0.9, Math.max(0.85, targetPos.y * 0.85), -0.65);
     }
 
     // Update Flight Trail
@@ -2139,6 +2318,12 @@ const CR7Engine = {
 
     if (p >= 1) {
       this.shotData.active = false;
+      if (this.camMode === "FOLLOW_BALL") {
+        this.camMode = "HOLD_AT_GOAL";
+        this.camHoldTimer = 0;
+        this.camHoldPos.set(targetPos.x * 0.72, Math.max(0.95, targetPos.y * 0.75 + 0.25), 2.85);
+        this.camHoldLook.set(targetPos.x * 0.9, Math.max(0.85, targetPos.y * 0.85), -0.65);
+      }
       this.handleShotOutcome();
     }
   },
@@ -2153,10 +2338,10 @@ const CR7Engine = {
       this.netRippleIntensity = 1.1;
       this.netImpactPoint.copy(targetPos);
 
-      // CẢI TIẾN 2: Kích hoạt song song 4-vao.mp3 và 4-cheer.mp3 ngay khi ghi bàn
+      // Kích hoạt song song 4-vao.mp3 và 4-cheer.mp3 ngay khi ghi bàn
       StadiumAudio.playGoalAndCheer();
 
-      // CẢI TIẾN 3: Bắt đầu bằng 3.0 giây chạy dang tay ăn mừng quanh sân rồi mới chuyển sang SIUUUUU
+      // Bắt đầu chạy dang tay ăn mừng quanh sân rồi mới chuyển sang SIUUUUU
       this.phase = "CELEBRATE_RUN";
       this.phaseTimer = 0;
 
@@ -2172,12 +2357,12 @@ const CR7Engine = {
         UIController.showCenterBanner(bannerTitle, bannerSub, true);
       }
     } else {
-      // CẢI TIẾN 5: Kích hoạt 4-nogoal.mp3 ngay khi sút hụt ra ngoài hoặc không vào (no score)
+      // Kích hoạt 4-nogoal.mp3 ngay khi sút hụt ra ngoài hoặc không vào (no score)
       StadiumAudio.playNoGoal();
       this.ball.position.z = 1.8;
       this.ball.position.x *= 1.25;
 
-      // CẢI TIẾN 3: Đứng lắc đầu thất vọng trong 2.0 giây nếu không ghi bàn
+      // Đứng lắc đầu thất vọng nếu không ghi bàn
       this.phase = "DISAPPOINTED";
       this.phaseTimer = 0;
 
@@ -2200,6 +2385,9 @@ const CR7Engine = {
   resetToStance() {
     this.phase = "STANCE";
     this.phaseTimer = 0;
+    this.sutAudioFired = false;
+    this.camMode = "DEFAULT";
+    this.camHoldTimer = 0;
     this.shotData.active = false;
     this.ball.position.set(0, 0.22, 11.0);
     this.ball.rotation.set(0, 0, 0);
@@ -2239,7 +2427,12 @@ const CR7Engine = {
     const isHome = AppStore.state.screen === "HOME";
     const isCelebrating = this.phase === "CELEBRATE_RUN" || this.phase === "CELEBRATE_SIU";
 
-    this.phaseTimer += dt;
+    // CẢI TIẾN 2 & 5: Toàn bộ thời gian từ lúc nhả Space tới trước khi chân chạm quả bóng (STEP_CLOSE & RUNUP)
+    // chạy ở tốc độ Slow-Mo 0.5x (riêng âm thanh vẫn chạy tốc độ thực 1.0x không bị delay!)
+    const isPreContactSlowMo = this.phase === "STEP_CLOSE" || this.phase === "RUNUP";
+    const animDt = isPreContactSlowMo ? dt * this.preKickTimeScale : dt;
+
+    this.phaseTimer += animDt;
 
     // Process UI continuous input (Hold-Space Power Charge & 2x Arrow Keys)
     UIController.updatePerFrameInput(dt);
@@ -2257,10 +2450,10 @@ const CR7Engine = {
         }
       }
     } else {
-      this.updateDetailedCR7Sequence(dt);
+      this.updateDetailedCR7Sequence(animDt);
     }
 
-    // 2. Update Ball & Goalkeeper
+    // 2. Update Ball & Goalkeeper (full speed 1.0x once ball is launched!)
     this.updateBallAndKeeper(dt);
 
     // 3. Update Dynamic Net Wave Ripple
@@ -2303,7 +2496,7 @@ const CR7Engine = {
         : 0.25 + Math.sin(elapsed * 12) * 0.2;
     }
 
-    // 5. CẢI TIẾN 4: Animate Blinking / Pulsing Multi-Ring Aim Reticle
+    // 5. Animate Blinking / Pulsing Multi-Ring Aim Reticle
     if (this.aimReticle && this.aimReticle.visible) {
       this.aimReticle.position.x = THREE.MathUtils.lerp(
         this.aimReticle.position.x,
@@ -2328,33 +2521,61 @@ const CR7Engine = {
       goldMat.opacity = blink;
       bladeMat.opacity = 0.65 + Math.sin(elapsed * 18) * 0.35;
 
-      // Flash bright green/gold when power bar is passing through the 80% sweet spot!
       const isNear80 = Math.abs(AppStore.state.powerPercent - 80) <= 4;
       centerMat.color.setHex(isNear80 ? 0x22c55e : elapsed % 0.35 < 0.17 ? 0xff1e1e : 0xf5c542);
       const coreScale = isNear80 ? 1.45 : 1 + Math.sin(elapsed * 16) * 0.25;
       centerCore.scale.set(coreScale, coreScale, 1);
     }
 
-    // 6. CẢI TIẾN 2: Full-Body Camera Framing (Shows 100% of CR7 from head to boots on pitch, smoothly tracking celebration run)
+    // 6. CẢI TIẾN 5: HỆ THỐNG CAMERA CẬN CẢNH THEO BÓNG -> DỪNG TRƯỚC KHUNG THÀNH 1 GIÂY -> TRỞ VỀ MẶC ĐỊNH BAN ĐẦU
     const isPortrait = window.innerHeight > window.innerWidth;
-    const portraitBackOffset = isPortrait ? 2.4 : 0.0;
-    const followX = isCelebrating && this.cr7 ? this.cr7.position.x * 0.45 : 0;
+    const portraitBackOffset = isPortrait ? 2.5 : 0.0;
 
-    if (isHome) {
-      const swayX = Math.sin(elapsed * 0.5) * 0.75;
-      const targetZ =
-        (this.phase === "KICK" || isCelebrating ? 16.0 : 18.0) + portraitBackOffset;
-      this.camera.position.x = THREE.MathUtils.lerp(this.camera.position.x, -0.45 + swayX + followX * 0.5, 0.06);
-      this.camera.position.y = THREE.MathUtils.lerp(this.camera.position.y, 1.54, 0.06);
-      this.camera.position.z = THREE.MathUtils.lerp(this.camera.position.z, targetZ, 0.06);
-      this.camera.lookAt(followX, 1.02, 2.2);
+    if (this.camMode === "FOLLOW_BALL" && this.ball) {
+      // Góc camera cận cảnh di chuyển bám sát theo điểm mốc là quả bóng từ lúc chân chạm bóng đến trước sát khung thành
+      const bx = this.ball.position.x;
+      const by = this.ball.position.y;
+      const bz = this.ball.position.z;
+
+      const closeCamX = bx * 0.78;
+      const closeCamY = Math.max(0.82, by + 0.36);
+      const closeCamZ = Math.max(2.85, bz + 2.15);
+
+      this.camera.position.x = THREE.MathUtils.lerp(this.camera.position.x, closeCamX, 0.42);
+      this.camera.position.y = THREE.MathUtils.lerp(this.camera.position.y, closeCamY, 0.42);
+      this.camera.position.z = THREE.MathUtils.lerp(this.camera.position.z, closeCamZ, 0.45);
+      // Điểm mốc nhìn luôn là tâm quả bóng
+      this.camera.lookAt(bx, Math.max(0.35, by), bz - 0.6);
+    } else if (this.camMode === "HOLD_AT_GOAL") {
+      // Khi tới trước sát khung thành: Camera DỪNG ĐỨNG YÊN hoàn toàn trong đúng 1.0 giây!
+      this.camHoldTimer += dt;
+      this.camera.position.copy(this.camHoldPos);
+      this.camera.lookAt(this.camHoldLook);
+
+      if (this.camHoldTimer >= 1.0) {
+        // Đủ 1.0 giây đứng yên trước khung thành -> Trở lại góc camera mặc định ban đầu!
+        this.camMode = "DEFAULT";
+        this.camHoldTimer = 0;
+      }
     } else {
-      const cfg = GAME_MODE_FIELD_MAP.PENALTY_11M;
-      const targetZ = (this.shotData.active ? 15.2 : cfg.cameraOffset.z) + portraitBackOffset;
-      this.camera.position.x = THREE.MathUtils.lerp(this.camera.position.x, cfg.cameraOffset.x + followX * 0.4, 0.08);
-      this.camera.position.y = THREE.MathUtils.lerp(this.camera.position.y, cfg.cameraOffset.y, 0.08);
-      this.camera.position.z = THREE.MathUtils.lerp(this.camera.position.z, targetZ, 0.08);
-      this.camera.lookAt(cfg.cameraLookAt.x + followX, cfg.cameraLookAt.y, cfg.cameraLookAt.z);
+      // Góc camera mặc định ban đầu (nhìn trọn vẹn full người cầu thủ + lia mượt theo cầu thủ khi chạy ăn mừng)
+      const followX = isCelebrating && this.cr7 ? this.cr7.position.x * 0.45 : 0;
+
+      if (isHome) {
+        const swayX = Math.sin(elapsed * 0.5) * 0.75;
+        const targetZ = 18.65 + portraitBackOffset;
+        this.camera.position.x = THREE.MathUtils.lerp(this.camera.position.x, -0.45 + swayX + followX * 0.5, 0.12);
+        this.camera.position.y = THREE.MathUtils.lerp(this.camera.position.y, 1.64, 0.12);
+        this.camera.position.z = THREE.MathUtils.lerp(this.camera.position.z, targetZ, 0.12);
+        this.camera.lookAt(followX, 1.14, 2.2);
+      } else {
+        const cfg = GAME_MODE_FIELD_MAP.PENALTY_11M;
+        const targetZ = cfg.cameraOffset.z + portraitBackOffset;
+        this.camera.position.x = THREE.MathUtils.lerp(this.camera.position.x, cfg.cameraOffset.x + followX * 0.4, 0.14);
+        this.camera.position.y = THREE.MathUtils.lerp(this.camera.position.y, cfg.cameraOffset.y, 0.14);
+        this.camera.position.z = THREE.MathUtils.lerp(this.camera.position.z, targetZ, 0.14);
+        this.camera.lookAt(cfg.cameraLookAt.x + followX, cfg.cameraLookAt.y, cfg.cameraLookAt.z);
+      }
     }
 
     this.renderer.render(this.scene, this.camera);
